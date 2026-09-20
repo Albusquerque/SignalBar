@@ -81,22 +81,6 @@ npm run package
 
 The release archive is written to `out/SignalBar-v0.2.1.zip`.
 
-## Automated GitHub releases
-
-The workflow in `.github/workflows/release.yml` runs the type-check, backend
-and frontend tests, build, packaging and ZIP integrity check on `main`, pull
-requests and release tags. Pushing a tag that exactly matches the package
-version automatically creates a GitHub Release with the installable ZIP and
-its SHA-256 checksum:
-
-```bash
-git tag v0.2.1
-git push origin v0.2.1
-```
-
-No personal access token is required: the release job uses GitHub's scoped
-workflow token with write access limited to repository contents.
-
 ## Display modes and performance
 
 Performance and Artwork are alternative full-bar providers; they are not
