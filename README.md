@@ -22,6 +22,15 @@ The mixed meter dedicates eight LEDs to CPU load, one dark centre separator,
 and eight LEDs to GPU load. The physical diffuser softens individual emitters;
 the Decky preview keeps the 17 logical cells visible.
 
+### Playtime Countdown
+
+An active Steam Families limit takes priority while a game is running; an
+optional personal timer provides the same signal without parental controls.
+Both temporarily replace Artwork or Performance. The bar empties from right to
+left, turns amber and then red as time runs out, and repeats three brief white
+flashes during the final eight seconds before automatically returning to the
+selected display.
+
 *Interface visualisations reflect the implemented controls; exact
 SteamOS rendering can vary by Decky/Steam version.*
 
