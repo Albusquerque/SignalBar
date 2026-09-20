@@ -43,10 +43,19 @@ class PackagingTests(unittest.TestCase):
         self.assertNotIn("useCountdownSignals", panel)
         self.assertIn('label="Extra dark LEDs"', panel)
         self.assertIn('setSetting("countdown_dark_edge_compensation", value)', panel)
+        self.assertIn("Countdown and Performance only", panel)
         self.assertIn('label="Full bar scale"', panel)
         self.assertIn('setSetting("countdown_full_bar_minutes", Number(option.data))', panel)
         self.assertIn("Steam Families callback:", panel)
         self.assertIn("Game detection:", panel)
+        self.assertIn('label="Meter response"', panel)
+        self.assertIn('setSetting("performance_smoothing", String(option.data))', panel)
+
+        engine = (root / "py_modules/signalbar/backend/engine.py").read_text(encoding="utf-8")
+        self.assertIn(
+            'dark_edge_compensation=values["countdown_dark_edge_compensation"]',
+            engine,
+        )
 
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ from signalbar.models import GameState, PerformanceSample, ProviderOutput, norma
 from signalbar.providers import (
     ArtworkProvider,
     CountdownProvider,
+    PerformanceProvider,
     countdown_final_alert_frame,
     countdown_frame,
     mixed_performance_frame,
@@ -57,6 +58,20 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(sum(pixel != (0, 0, 0) for pixel in performance_frame(70, 60)), 12)
         self.assertEqual(sum(pixel != (0, 0, 0) for pixel in performance_frame(100, 60)), 17)
 
+        compensated = performance_frame(
+            70, 60, dark_edge_compensation=3,
+        )
+        compensated_full = performance_frame(
+            100, 60, dark_edge_compensation=3,
+        )
+        self.assertEqual(sum(pixel != (0, 0, 0) for pixel in compensated), 9)
+        self.assertEqual(sum(pixel != (0, 0, 0) for pixel in compensated_full), 14)
+
+        barely_visible = performance_frame(
+            6, 60, dark_edge_compensation=3,
+        )
+        self.assertEqual(sum(pixel != (0, 0, 0) for pixel in barely_visible), 1)
+
     def test_mixed_performance_uses_eight_plus_separator_plus_eight(self):
         sample = PerformanceSample(
             gpu_load=50, gpu_temp_c=70, cpu_load=25, cpu_temp_c=60, sampled_at=1,
@@ -72,6 +87,84 @@ class CoreTests(unittest.TestCase):
         same_direction = mixed_performance_frame(sample, direction="same")
         self.assertNotEqual(same_direction[9], (0, 0, 0))
         self.assertEqual(same_direction[-1], (0, 0, 0))
+
+        compensated = mixed_performance_frame(
+            sample, direction="mirrored", dark_edge_compensation=3,
+        )
+        self.assertEqual(compensated[8], (0, 0, 0))
+        self.assertEqual(sum(pixel != (0, 0, 0) for pixel in compensated), 3)
+        self.assertNotEqual(compensated[0], (0, 0, 0))
+        self.assertNotEqual(compensated[-1], (0, 0, 0))
+
+    def test_performance_provider_applies_physical_compensation_only_to_output(self):
+        provider = PerformanceProvider()
+        provider._last = PerformanceSample(
+            gpu_load=70, gpu_temp_c=60, cpu_load=50, cpu_temp_c=60,
+            sampled_at=1,
+        )
+        provider._next_sample_at = float("inf")
+
+        logical = provider.frame(metric="gpu", dark_edge_compensation=0)
+        physical = provider.output(
+            metric="gpu", dark_edge_compensation=3,
+        ).frame
+        self.assertEqual(sum(pixel != (0, 0, 0) for pixel in logical), 12)
+        self.assertEqual(sum(pixel != (0, 0, 0) for pixel in physical), 9)
+
+    def test_balanced_performance_smoothing_limits_jumps_and_confirms_falls(self):
+        class SequenceMetrics:
+            def __init__(self, loads):
+                self.loads = iter(loads)
+
+            def sample(self):
+                load = next(self.loads)
+                return PerformanceSample(
+                    gpu_load=load, gpu_temp_c=60,
+                    cpu_load=load, cpu_temp_c=60,
+                    sampled_at=1,
+                )
+
+        clock = ManualClock(0)
+        provider = PerformanceProvider(
+            metrics=SequenceMetrics([20, 90, 90, 10, 10]),
+            clock=clock,
+        )
+
+        provider.output(metric="gpu", smoothing="balanced")
+        self.assertEqual(provider.sample.gpu_load, 20)
+        clock.advance(0.5)
+        provider.output(metric="gpu", smoothing="balanced")
+        self.assertEqual(provider.sample.gpu_load, 32.5)
+        clock.advance(0.5)
+        provider.output(metric="gpu", smoothing="balanced")
+        self.assertEqual(provider.sample.gpu_load, 45.0)
+
+        # One low sample is ignored; a confirmed fall then decays gradually.
+        clock.advance(0.5)
+        provider.output(metric="gpu", smoothing="balanced")
+        self.assertEqual(provider.sample.gpu_load, 45.0)
+        clock.advance(0.5)
+        provider.output(metric="gpu", smoothing="balanced")
+        self.assertEqual(provider.sample.gpu_load, 38.0)
+        self.assertEqual(provider.sample.cpu_load, 38.0)
+
+    def test_responsive_performance_smoothing_accepts_a_fall_immediately(self):
+        class SequenceMetrics:
+            def __init__(self):
+                self.loads = iter([80, 20])
+
+            def sample(self):
+                load = next(self.loads)
+                return PerformanceSample(
+                    gpu_load=load, gpu_temp_c=60, sampled_at=1,
+                )
+
+        clock = ManualClock(0)
+        provider = PerformanceProvider(metrics=SequenceMetrics(), clock=clock)
+        provider.output(metric="gpu", smoothing="responsive")
+        clock.advance(0.5)
+        provider.output(metric="gpu", smoothing="responsive")
+        self.assertLess(provider.sample.gpu_load, 80)
 
     def test_temperature_thresholds_and_palette_are_explicit(self):
         self.assertEqual(temperature_color(50, 50, 90, "classic"), (35, 205, 95))
@@ -331,7 +424,11 @@ class PersistenceTests(unittest.TestCase):
             loaded = SettingsStore(path).all()
             self.assertEqual(loaded["mode"], "artwork")
             self.assertEqual(loaded["artwork_manual_y"], 0.90)
+            self.assertEqual(loaded["performance_smoothing"], "balanced")
             self.assertEqual(json.loads(Path(path).read_text())["mode"], "artwork")
+
+            store.update({"performance_smoothing": "invalid"})
+            self.assertEqual(store.all()["performance_smoothing"], "balanced")
 
     def test_countdown_settings_persist_and_validate(self):
         with tempfile.TemporaryDirectory() as directory:

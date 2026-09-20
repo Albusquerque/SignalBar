@@ -14,6 +14,13 @@ PALETTES = {
     "icefire": ((45, 105, 245), (170, 75, 220), (245, 55, 95)),
 }
 
+# alpha-up, alpha-down, lower samples required, max rise %/s, max fall %/s
+SMOOTHING_PROFILES = {
+    "responsive": (0.70, 0.45, 1, 60.0, 45.0),
+    "balanced": (0.45, 0.20, 2, 25.0, 16.0),
+    "smooth": (0.25, 0.12, 3, 12.5, 8.0),
+}
+
 
 def _lerp(left, right, amount):
     return int(round(left + (right - left) * amount))
@@ -30,21 +37,70 @@ def temperature_color(temp_c, cool_c=50.0, hot_c=90.0, palette="thermal"):
     return tuple(_lerp(middle[index], hot[index], amount) for index in range(3))
 
 
-def _meter(load_percent, temp_c, count, cool_c, hot_c, palette):
+def _meter_lit_count(load_percent, count):
     load = max(0.0, min(100.0, float(load_percent)))
-    lit = max(0, min(count, int(round(count * load / 100.0))))
+    return max(0, min(count, int(round(count * load / 100.0))))
+
+
+def _compensated_lit_counts(lit_counts, dark_edge_compensation):
+    """Remove a total number of edge pixels while retaining active meters.
+
+    Mixed mode shares the requested compensation across both halves instead of
+    subtracting it twice. The fuller half is reduced first, which keeps the
+    split display balanced while leaving one physical pixel for each non-empty
+    logical meter.
+    """
+    result = [max(0, int(value)) for value in lit_counts]
+    compensation = max(0, min(LED_COUNT - 1, int(dark_edge_compensation)))
+    for _ in range(compensation):
+        candidates = [index for index, value in enumerate(result) if value > 1]
+        if not candidates:
+            break
+        selected = max(candidates, key=lambda index: (result[index], -index))
+        result[selected] -= 1
+    return result
+
+
+def _meter(load_percent, temp_c, count, cool_c, hot_c, palette, lit_count=None):
+    lit = _meter_lit_count(load_percent, count) if lit_count is None else int(lit_count)
+    lit = max(0, min(count, lit))
     color = temperature_color(temp_c, cool_c, hot_c, palette)
     return [color] * lit + [(0, 0, 0)] * (count - lit)
 
 
-def performance_frame(load_percent, temp_c, cool_c=50.0, hot_c=90.0, palette="thermal"):
-    return normalize_frame(_meter(load_percent, temp_c, LED_COUNT, cool_c, hot_c, palette))
+def performance_frame(
+    load_percent, temp_c, cool_c=50.0, hot_c=90.0, palette="thermal",
+    dark_edge_compensation=0,
+):
+    logical_lit = _meter_lit_count(load_percent, LED_COUNT)
+    physical_lit = _compensated_lit_counts(
+        [logical_lit], dark_edge_compensation,
+    )[0]
+    return normalize_frame(_meter(
+        load_percent, temp_c, LED_COUNT, cool_c, hot_c, palette,
+        lit_count=physical_lit,
+    ))
 
 
-def mixed_performance_frame(sample, cool_c=50.0, hot_c=90.0, palette="thermal", direction="mirrored"):
+def mixed_performance_frame(
+    sample, cool_c=50.0, hot_c=90.0, palette="thermal",
+    direction="mirrored", dark_edge_compensation=0,
+):
     """CPU left, black separator, GPU right with selectable direction."""
-    cpu = _meter(sample.cpu_load or 0.0, sample.cpu_temp_c or cool_c, 8, cool_c, hot_c, palette)
-    gpu = _meter(sample.gpu_load or 0.0, sample.gpu_temp_c or cool_c, 8, cool_c, hot_c, palette)
+    cpu_load = sample.cpu_load or 0.0
+    gpu_load = sample.gpu_load or 0.0
+    cpu_lit, gpu_lit = _compensated_lit_counts(
+        [_meter_lit_count(cpu_load, 8), _meter_lit_count(gpu_load, 8)],
+        dark_edge_compensation,
+    )
+    cpu = _meter(
+        cpu_load, sample.cpu_temp_c or cool_c, 8, cool_c, hot_c, palette,
+        lit_count=cpu_lit,
+    )
+    gpu = _meter(
+        gpu_load, sample.gpu_temp_c or cool_c, 8, cool_c, hot_c, palette,
+        lit_count=gpu_lit,
+    )
     if direction == "mirrored":
         gpu = list(reversed(gpu))
     return normalize_frame(cpu + [(0, 0, 0)] + gpu)
@@ -155,32 +211,119 @@ class PerformanceProvider:
         self._clock = clock
         self._last = PerformanceSample()
         self._next_sample_at = 0.0
+        self._last_sample_at = 0.0
+        self._fall_streak = {"cpu": 0, "gpu": 0}
+        self._smoothing_name = "balanced"
 
     @property
     def sample(self):
         return self._last
 
+    def _smooth_load(self, name, raw, previous, profile, elapsed):
+        if raw is None:
+            self._fall_streak[name] = 0
+            return None
+        raw = max(0.0, min(100.0, float(raw)))
+        if previous is None:
+            self._fall_streak[name] = 0
+            return raw
+        previous = max(0.0, min(100.0, float(previous)))
+        rise_alpha, fall_alpha, fall_samples, rise_rate, fall_rate = profile
+        if raw >= previous:
+            self._fall_streak[name] = 0
+            alpha = rise_alpha
+            rate = rise_rate
+        else:
+            self._fall_streak[name] += 1
+            if self._fall_streak[name] < fall_samples:
+                return previous
+            alpha = fall_alpha
+            rate = fall_rate
+        candidate = previous + alpha * (raw - previous)
+        limit = max(0.1, rate * max(0.05, elapsed))
+        delta = max(-limit, min(limit, candidate - previous))
+        return max(0.0, min(100.0, previous + delta))
+
+    def _smooth_sample(self, raw, smoothing, now):
+        profile = SMOOTHING_PROFILES.get(
+            str(smoothing), SMOOTHING_PROFILES["balanced"],
+        )
+        elapsed = (
+            self.interval_s if self._last_sample_at <= 0
+            else max(0.05, min(2.0, now - self._last_sample_at))
+        )
+        previous = self._last
+        self._last_sample_at = now
+        return PerformanceSample(
+            gpu_load=self._smooth_load(
+                "gpu", raw.gpu_load, previous.gpu_load, profile, elapsed,
+            ),
+            gpu_temp_c=raw.gpu_temp_c,
+            cpu_load=self._smooth_load(
+                "cpu", raw.cpu_load, previous.cpu_load, profile, elapsed,
+            ),
+            cpu_temp_c=raw.cpu_temp_c,
+            sampled_at=raw.sampled_at or now,
+        )
+
+    def frame(
+        self, metric="gpu", cool_c=50.0, hot_c=90.0, palette="thermal",
+        direction="mirrored", dark_edge_compensation=0,
+    ):
+        if metric == "cpu":
+            return performance_frame(
+                self._last.cpu_load or 0.0, self._last.cpu_temp_c or cool_c,
+                cool_c, hot_c, palette, dark_edge_compensation,
+            )
+        if metric == "mixed":
+            return mixed_performance_frame(
+                self._last, cool_c, hot_c, palette, direction,
+                dark_edge_compensation,
+            )
+        return performance_frame(
+            self._last.gpu_load or 0.0, self._last.gpu_temp_c or cool_c,
+            cool_c, hot_c, palette, dark_edge_compensation,
+        )
+
     def output(
         self, metric="gpu", cool_c=50.0, hot_c=90.0, palette="thermal",
-        direction="mirrored", enabled=True,
+        direction="mirrored", dark_edge_compensation=0,
+        smoothing="balanced", enabled=True,
     ):
         now = self._clock()
         if enabled and now >= self._next_sample_at:
-            self._last = self.metrics.sample()
+            smoothing = (
+                str(smoothing) if str(smoothing) in SMOOTHING_PROFILES
+                else "balanced"
+            )
+            if smoothing != self._smoothing_name:
+                self._fall_streak = {"cpu": 0, "gpu": 0}
+                self._smoothing_name = smoothing
+            raw = self.metrics.sample()
+            self._last = self._smooth_sample(raw, smoothing, now)
             self._next_sample_at = now + self.interval_s
         if not enabled:
             return ProviderOutput(self.name, None, "performance disabled")
         if metric == "cpu":
             if not self._last.cpu_available:
                 return ProviderOutput(self.name, None, "CPU metrics unavailable")
-            frame = performance_frame(self._last.cpu_load, self._last.cpu_temp_c, cool_c, hot_c, palette)
+            frame = self.frame(
+                metric, cool_c, hot_c, palette, direction,
+                dark_edge_compensation,
+            )
             return ProviderOutput(self.name, frame, "CPU load and temperature")
         if metric == "mixed":
             if not (self._last.cpu_available or self._last.gpu_available):
                 return ProviderOutput(self.name, None, "CPU/GPU metrics unavailable")
-            frame = mixed_performance_frame(self._last, cool_c, hot_c, palette, direction)
+            frame = self.frame(
+                metric, cool_c, hot_c, palette, direction,
+                dark_edge_compensation,
+            )
             return ProviderOutput(self.name, frame, "CPU left, GPU right")
         if not self._last.gpu_available:
             return ProviderOutput(self.name, None, "GPU metrics unavailable")
-        frame = performance_frame(self._last.gpu_load, self._last.gpu_temp_c, cool_c, hot_c, palette)
+        frame = self.frame(
+            metric, cool_c, hot_c, palette, direction,
+            dark_edge_compensation,
+        )
         return ProviderOutput(self.name, frame, "GPU load and temperature")

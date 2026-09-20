@@ -1,4 +1,4 @@
-name: Verify and release SignalBar
+name: Verify SignalBar
 
 on:
   push:
@@ -66,29 +66,3 @@ jobs:
             out/SignalBar-*.zip
             out/SHA256SUMS
           if-no-files-found: error
-
-  release:
-    name: Publish GitHub Release
-    if: startsWith(github.ref, 'refs/tags/')
-    needs: verify
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Download verified release files
-        uses: actions/download-artifact@v8
-        with:
-          name: signalbar-release
-          path: release-assets
-
-      - name: Create release and upload ZIP
-        run: |
-          gh release create "${GITHUB_REF_NAME}" \
-            "release-assets/SignalBar-${GITHUB_REF_NAME}.zip" \
-            "release-assets/SHA256SUMS" \
-            --repo "${GITHUB_REPOSITORY}" \
-            --verify-tag \
-            --title "SignalBar ${GITHUB_REF_NAME}" \
-            --generate-notes
-        env:
-          GH_TOKEN: ${{ github.token }}

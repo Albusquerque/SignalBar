@@ -267,6 +267,8 @@ class Engine:
                     hot_c=values["hot_temp_c"],
                     palette=values["temperature_palette"],
                     direction=values["mixed_direction"],
+                    dark_edge_compensation=values["countdown_dark_edge_compensation"],
+                    smoothing=values["performance_smoothing"],
                     enabled=(values["mode"] == "performance"),
                 )
                 artwork = self.artwork.output(game.appid)
@@ -345,8 +347,24 @@ class Engine:
             runtime_debug["parental_wait_s"] = (
                 max(0.0, now - wait_started) if wait_started else None
             )
+            logical_performance = self.performance.frame(
+                metric=values["performance_metric"],
+                cool_c=values["cool_temp_c"],
+                hot_c=values["hot_temp_c"],
+                palette=values["temperature_palette"],
+                direction=values["mixed_direction"],
+                dark_edge_compensation=0,
+            )
+            physical_performance = self.performance.frame(
+                metric=values["performance_metric"],
+                cool_c=values["cool_temp_c"],
+                hot_c=values["hot_temp_c"],
+                palette=values["temperature_palette"],
+                direction=values["mixed_direction"],
+                dark_edge_compensation=values["countdown_dark_edge_compensation"],
+            )
             return {
-                "version": "0.3.0",
+                "version": "0.3.1",
                 "available": self._available,
                 "active": self._owner == "SignalBar",
                 "owner": self._owner,
@@ -355,6 +373,7 @@ class Engine:
                 "error": self._error,
                 "mode": values["mode"],
                 "performance_metric": values["performance_metric"],
+                "performance_smoothing": values["performance_smoothing"],
                 "mixed_direction": values["mixed_direction"],
                 "temperature_palette": values["temperature_palette"],
                 "artwork_mode": artwork_settings["mode"],
@@ -375,6 +394,8 @@ class Engine:
                     "gpu_temperature": sample.gpu_temp_c,
                     "cpu_load": sample.cpu_load,
                     "cpu_temperature": sample.cpu_temp_c,
+                    "logical_lit": sum(pixel != (0, 0, 0) for pixel in logical_performance),
+                    "physical_lit": sum(pixel != (0, 0, 0) for pixel in physical_performance),
                 },
                 "artwork": art,
                 "countdown": countdown,

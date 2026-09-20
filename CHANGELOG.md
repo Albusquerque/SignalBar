@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.1 — 2026-09-20
+
+- Extend the existing **Extra dark LEDs** optical calibration to Performance
+  as well as Playtime Countdown, retaining the default value of three.
+- Keep Decky's Performance preview logical while writing the compensated LED
+  count to hardware; e.g. 12 cells in the preview become 9 physical LEDs with
+  compensation 3.
+- Share one compensation across the two halves of the mixed CPU/GPU meter
+  instead of subtracting it independently from each half. Each active half
+  retains at least one physical LED. Artwork remains unchanged.
+- Show the live logical-to-physical Performance mapping in Debug.
+- Add Responsive, Balanced and Smooth meter-response profiles for CPU and GPU,
+  with Balanced as the default.
+- Filter the displayed percentage and LED length from the same value. Balanced
+  limits movement over time, accepts sustained rises progressively, requires
+  two lower samples before falling and then decays more slowly to prevent
+  one-sample spikes from making the bar oscillate.
+
 ## 0.3.0 — 2026-09-20
 
 - Start game detection, Artwork sampling, Performance activation, Steam

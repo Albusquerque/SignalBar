@@ -52,6 +52,11 @@ const PERFORMANCE_OPTIONS = [
   { data: "cpu", label: "CPU" },
   { data: "mixed", label: "CPU + GPU" },
 ];
+const SMOOTHING_OPTIONS = [
+  { data: "responsive", label: "Responsive" },
+  { data: "balanced", label: "Balanced" },
+  { data: "smooth", label: "Smooth" },
+];
 
 const PALETTE_OPTIONS = [
   { data: "thermal", label: "Cyan → amber → red" },
@@ -374,6 +379,23 @@ function Content() {
             onChange={async (option) => setStatus(await setSetting("performance_metric", String(option.data)))}
           />
         </PanelSectionRow>
+        <PanelSectionRow>
+          <DropdownItem
+            label="Meter response"
+            rgOptions={SMOOTHING_OPTIONS}
+            selectedOption={status.performance_smoothing}
+            onChange={async (option) => setStatus(await setSetting("performance_smoothing", String(option.data)))}
+          />
+        </PanelSectionRow>
+        <PanelSectionRow>
+          <div style={{ fontSize: ".78em", opacity: 0.72 }}>
+            {status.performance_smoothing === "responsive"
+              ? "Follows short CPU/GPU changes more closely."
+              : status.performance_smoothing === "smooth"
+                ? "Slow, steady movement with stronger filtering."
+                : "Reduces sudden jumps while keeping sustained load changes visible."}
+          </div>
+        </PanelSectionRow>
         {status.performance_metric === "mixed" ? (
           <>
             <PanelSectionRow>
@@ -492,8 +514,10 @@ function Content() {
               <SliderField
                 label="Extra dark LEDs"
                 description={status.countdown.active && !status.countdown.alerting
-                  ? `Countdown only · ${status.countdown.logical_lit} shown in preview → ${status.countdown.physical_lit} lit on hardware.`
-                  : "Countdown only. This never changes Artwork or Performance. The preview keeps the logical LED count."}
+                  ? `Countdown · ${status.countdown.logical_lit} shown in preview → ${status.countdown.physical_lit} lit on hardware.`
+                  : status.mode === "performance"
+                    ? `Performance · ${status.performance.logical_lit} shown in preview → ${status.performance.physical_lit} lit on hardware.`
+                    : "Countdown and Performance only. Artwork is unchanged. Previews keep the logical LED count."}
                 value={status.countdown_dark_edge_compensation}
                 min={0}
                 max={6}

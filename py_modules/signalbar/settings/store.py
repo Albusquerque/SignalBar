@@ -11,6 +11,7 @@ DEFAULTS = {
     # Retained only to migrate v0.1/v0.2 Automatic configurations.
     "performance_enabled": True,
     "performance_metric": "gpu",
+    "performance_smoothing": "balanced",
     "mixed_direction": "mirrored",
     "temperature_palette": "thermal",
     "artwork_mode": "auto",
@@ -34,6 +35,7 @@ VALID_MODES = {"artwork", "performance", "disabled"}
 VALID_ARTWORK_MODES = {"auto", "center", "lower", "manual"}
 VALID_ARTWORK_SOURCES = {"hero", "header", "capsule"}
 VALID_PERFORMANCE_METRICS = {"cpu", "gpu", "mixed"}
+VALID_PERFORMANCE_SMOOTHING = {"responsive", "balanced", "smooth"}
 VALID_MIXED_DIRECTIONS = {"same", "mirrored"}
 VALID_TEMPERATURE_PALETTES = {"thermal", "classic", "icefire"}
 VALID_COUNTDOWN_COLOURS = {"cyan", "green", "amber", "violet", "white"}
@@ -72,6 +74,8 @@ class SettingsStore:
             self._data["artwork_source"] = DEFAULTS["artwork_source"]
         if self._data["performance_metric"] not in VALID_PERFORMANCE_METRICS:
             self._data["performance_metric"] = DEFAULTS["performance_metric"]
+        if self._data["performance_smoothing"] not in VALID_PERFORMANCE_SMOOTHING:
+            self._data["performance_smoothing"] = DEFAULTS["performance_smoothing"]
         if self._data["mixed_direction"] not in VALID_MIXED_DIRECTIONS:
             self._data["mixed_direction"] = DEFAULTS["mixed_direction"]
         if self._data["temperature_palette"] not in VALID_TEMPERATURE_PALETTES:

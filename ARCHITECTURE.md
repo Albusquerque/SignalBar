@@ -69,6 +69,20 @@ two signals grow from the outside edges toward the separator. Colour comes
 from a selected three-stop palette and blends continuously between configurable
 Cool and Hot temperature thresholds.
 
+The persisted 0–6 **Extra dark LEDs** value is applied only to the physical
+Performance frame; the Decky preview remains logical. Full CPU/GPU meters also
+receive the compensation. Mixed mode removes that number across both halves in
+total, favouring the fuller side and retaining one pixel for each active meter.
+Artwork bypasses this calibration.
+
+Raw CPU and GPU percentages are sampled at 2 Hz, then independently filtered
+through the selected Responsive, Balanced or Smooth response profile. Each
+profile uses asymmetric exponential smoothing, time-based slew limits and a
+different number of lower samples required before decay. Balanced defaults to
+two lower samples and a slower release, so transient dips do not make the LED
+length oscillate. Status and rendered frames both use the filtered values;
+temperature values remain unfiltered because they already change slowly.
+
 Frames are always logical left-to-right. The hardware adapter reverses the
 physical sysfs path order by default for the official Steam Machine, so UI
 previews and the user's physical viewpoint agree without contaminating provider
@@ -84,12 +98,12 @@ is registered only after the backend accepts the new AppID, because
 Steam may answer synchronously. Disabling parental display, leaving the game or
 switching AppID deletes that session's parental state, including its final alert.
 The lit portion occupies the logical left side, so its disappearing edge moves
-right-to-left. A persisted 0–6 physical dark-edge compensation counters
-light-guide bloom; it defaults to three and is applied only by CountdownProvider.
-Artwork and Performance frames bypass it. Status exposes the uncompensated logical
-frame for Decky plus logical/physical lit counts, while Renderer receives the
-compensated frame. Full bars remain 17 pixels and a running timer retains at
-least one physical pixel.
+right-to-left. The shared persisted 0–6 physical dark-edge compensation counters
+light-guide bloom in Countdown and Performance and defaults to three. Status
+exposes uncompensated logical frames plus logical/physical lit counts, while
+Renderer receives compensated frames. Countdown full bars remain 17 pixels and
+a running timer retains at least one physical pixel. Artwork bypasses the
+calibration.
 A rendering scale of zero uses the timer's initial duration. Fixed 1–4 hour
 scales map that remaining window to 17 pixels and clamp longer durations to a
 full bar. Preview deliberately ignores the fixed scale.

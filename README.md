@@ -34,6 +34,17 @@ selected display.
 *Interface visualisations reflect the implemented controls; exact
 SteamOS rendering can vary by Decky/Steam version.*
 
+## v0.3.1
+
+v0.3.1 extends the **Extra dark LEDs** optical calibration to Performance.
+The default remains three: Decky continues to show the logical meter, while
+the physical bar lights three fewer LEDs so dark sections remain distinct
+through the Steam Machine's diffuser. Mixed CPU/GPU mode shares those three
+extra dark LEDs across both halves, and Artwork is not affected. It also adds
+Responsive, Balanced and Smooth meter-response profiles. Balanced is the
+default and reduces abrupt CPU/GPU oscillation while keeping sustained load
+changes visible.
+
 ## v0.3.0 — hardware-tested release
 
 v0.3.0 is the first release to make SignalBar a persistent background signal
@@ -98,7 +109,7 @@ settings panel to be opened first.
 
 1. Install Decky Loader and enable Developer Mode.
 2. In Decky settings, choose **Developer → Install Plugin from ZIP** and select
-   `SignalBar-v0.3.0.zip`.
+   `SignalBar-v0.3.1.zip`.
 3. Restart Decky Loader if the panel does not appear immediately.
 
 Manual installation is also possible by extracting the ZIP into
@@ -125,7 +136,7 @@ npm run build
 npm run package
 ```
 
-The release archive is written to `out/SignalBar-v0.3.0.zip`.
+The release archive is written to `out/SignalBar-v0.3.1.zip`.
 
 ## Display modes and performance
 
@@ -146,6 +157,13 @@ temperature` is the point where it reaches its final hot colour. Between them,
 SignalBar blends continuously; below/above them it clamps to the endpoint
 colour. These controls are temperature thresholds, not colour pickers—the
 separate `Temperature colours` menu chooses the palette.
+
+`Meter response` controls load smoothing separately for CPU and GPU.
+**Responsive** follows short changes closely, **Balanced** confirms falling
+values and uses a slower decay to reduce visual yoyo, and **Smooth** favours a
+steadier display. The percentage shown in Decky is the same filtered value used
+to calculate LED length; `Last LED write` is the age of the most recent write,
+not the duration of a hardware operation.
 
 ## Playtime countdowns
 
@@ -169,11 +187,12 @@ alert without cancelling either real timer. All countdowns remain
 below Valve/system ownership and are suppressed when Display is Disabled.
 
 The Debug setting **Extra dark LEDs** calibrates physical diffuser bloom without
-changing the logical Decky preview. For example, when the preview contains 12
-lit cells, a compensation of 2 writes 10 lit LEDs to the hardware. It accepts
-0–6, defaults to 3, leaves a completely full 17-LED bar intact, and keeps one
-physical LED visible while time remains. This calibration is exclusive to
-countdown frames and never alters Artwork or Performance.
+changing the logical Decky preview. It accepts 0–6 and defaults to 3. For both
+Countdown and Performance, 12 cells in the preview therefore write 9 lit LEDs
+to the hardware. Countdown keeps a completely full 17-LED bar intact;
+Performance also applies the selected value at 100% load. Mixed CPU/GPU shares
+one compensation across both halves and retains one physical LED for every
+active half. Artwork is never altered.
 
 **Full bar scale** controls time mapping. `Timer duration` starts every real
 timer at 17 LEDs. Fixed 1/2/3/4-hour scales make 17 LEDs represent that remaining
@@ -205,7 +224,7 @@ Families is idle, disabled, waiting, or received after a measured delay.
   Steam Families countdown and final alert have been tested on the official
   Steam Machine. Private SteamClient callbacks and available CPU/GPU sensor
   paths can still vary with future SteamOS or Decky builds.
-- v0.3.0 intentionally has no Internet artwork fallback, audio/VU, network,
+- v0.3.1 intentionally has no Internet artwork fallback, audio/VU, network,
   FPS, Moonlight/Sunshine, controller, or storage providers.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for design details.
