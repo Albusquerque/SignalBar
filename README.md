@@ -7,10 +7,6 @@ system display. It is deliberately Valve-first: when Steam or another process
 changes the LEDs, SignalBar yields, waits through a cooldown and a stable
 period, then considers resuming.
 
-![SignalBar lighting on the official Steam Machine](assets/signalbar-product-hero-v4.png)
-
-*Photorealistic product visualisation based on tester-supplied hardware photos.*
-
 ### Artwork mode
 
 ![SignalBar Artwork mode sampling a Deep Rock Galactic Library Header](assets/signalbar-artwork-mode-v1.png)
