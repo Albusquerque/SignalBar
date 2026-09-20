@@ -1,4 +1,5 @@
 import {
+  ButtonItem,
   DropdownItem,
   PanelSection,
   PanelSectionRow,
@@ -10,11 +11,21 @@ import { definePlugin } from "@decky/api";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FaSignal } from "react-icons/fa";
 
-import { getArtwork, getStatus, setArtworkSetting, setMode, setSetting, submitArtwork } from "./api";
+import {
+  getArtwork,
+  getStatus,
+  previewCountdown,
+  setArtworkSetting,
+  setMode,
+  setSetting,
+  startFreeTimer,
+  stopFreeTimer,
+  submitArtwork,
+} from "./api";
 import { sampleArtwork } from "./artwork";
 import { PalettePreview } from "./components/PalettePreview";
-import { useSteamState } from "./hooks/useSteamState";
 import { performancePreview } from "./performance";
+import { startSignalBarRuntime } from "./runtime";
 import type { ArtworkPayload, Status } from "./types";
 
 const MODE_OPTIONS = [
@@ -52,6 +63,138 @@ const DIRECTION_OPTIONS = [
   { data: "same", label: "Both left → right" },
   { data: "mirrored", label: "Mirrored toward centre" },
 ];
+
+const COUNTDOWN_COLOUR_OPTIONS = [
+  { data: "cyan", label: "Cyan" },
+  { data: "green", label: "Green" },
+  { data: "amber", label: "Amber" },
+  { data: "violet", label: "Violet" },
+  { data: "white", label: "White" },
+];
+
+const COUNTDOWN_SCALE_OPTIONS = [
+  { data: 0, label: "Timer duration (starts full)" },
+  { data: 60, label: "Full bar = 1 hour" },
+  { data: 120, label: "Full bar = 2 hours" },
+  { data: 180, label: "Full bar = 3 hours" },
+  { data: 240, label: "Full bar = 4 hours" },
+];
+
+function formatRemaining(seconds: number): string {
+  const safe = Math.max(0, Math.ceil(seconds));
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  const remainder = safe % 60;
+  if (hours > 0) return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+  return `${minutes}:${String(remainder).padStart(2, "0")}`;
+}
+
+function formatAge(seconds: number | null): string {
+  if (seconds == null) return "never";
+  if (seconds < 1) return `${Math.round(seconds * 1000)} ms ago`;
+  return `${seconds.toFixed(1)} s ago`;
+}
+
+function CountdownPanel({
+  status,
+  setStatus,
+}: {
+  status: Status;
+  setStatus: (next: Status) => void;
+}) {
+  return (
+    <PanelSection title="Playtime countdown">
+      <PanelSectionRow>
+        <ToggleField
+          label="Steam Families limit"
+          description="Always takes priority over Artwork, Performance and a personal timer while a game is running."
+          checked={status.parental_countdown_enabled}
+          onChange={async (value) => setStatus(await setSetting("parental_countdown_enabled", value))}
+        />
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <DropdownItem
+          label="Starting colour"
+          rgOptions={COUNTDOWN_COLOUR_OPTIONS}
+          selectedOption={status.countdown_colour}
+          onChange={async (option) => setStatus(await setSetting("countdown_colour", String(option.data)))}
+        />
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <DropdownItem
+          label="Full bar scale"
+          description="Timer duration starts at 17 LEDs. A fixed scale means 17 LEDs represent that much remaining time; longer limits stay full until they enter the selected window."
+          rgOptions={COUNTDOWN_SCALE_OPTIONS}
+          selectedOption={status.countdown_full_bar_minutes}
+          onChange={async (option) => setStatus(await setSetting("countdown_full_bar_minutes", Number(option.data)))}
+        />
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <SliderField
+          label="Free timer"
+          description="Duration used the next time you start the personal countdown."
+          value={status.free_timer_minutes}
+          min={5}
+          max={240}
+          step={5}
+          showValue
+          valueSuffix=" min"
+          onChange={async (value) => setStatus(await setSetting("free_timer_minutes", value))}
+        />
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <ButtonItem
+          label="Personal limit"
+          description="The timer keeps running when this Decky panel is closed."
+          onClick={() => void startFreeTimer(status.free_timer_minutes).then(setStatus).catch(console.warn)}
+        >
+          Start / restart
+        </ButtonItem>
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <ButtonItem
+          label="Stop personal limit"
+          onClick={() => void stopFreeTimer().then(setStatus).catch(console.warn)}
+        >
+          Stop
+        </ButtonItem>
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <div style={{ width: "100%", fontSize: ".8em", opacity: 0.86 }}>
+          {status.countdown.active ? (
+            <>
+              {status.countdown.alerting ? (
+                <><b>{status.countdown.label}</b> · {formatRemaining(status.countdown.remaining_seconds)} remaining · triple white alert</>
+              ) : (
+                <>
+                  <b>{status.countdown.label}</b> · {formatRemaining(status.countdown.remaining_seconds)} remaining
+                  {status.countdown_full_bar_minutes > 0
+                    ? ` · full bar = ${status.countdown_full_bar_minutes / 60}h`
+                    : " · starts full"}
+                </>
+              )}
+              <PalettePreview colors={status.countdown.colors} />
+            </>
+          ) : (
+            "No countdown is active."
+          )}
+          <div style={{ marginTop: 5, opacity: 0.75 }}>
+            The bar empties from right to left. A configurable physical compensation counters diffuser bloom while this preview keeps the logical LED count. It turns amber below 15 minutes, then pure red below 5 minutes while the right-to-left circulation continues. During the final 8 seconds, three short white flashes repeat until zero.
+          </div>
+        </div>
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <ButtonItem
+          label="Test countdown and final alert"
+          description="Runs a 15-second countdown whose final 8 seconds demonstrate the white alert without cancelling a real timer."
+          onClick={() => void previewCountdown().then(setStatus).catch(console.warn)}
+        >
+          Preview
+        </ButtonItem>
+      </PanelSectionRow>
+    </PanelSection>
+  );
+}
 
 function Content() {
   const [status, setStatusState] = useState<Status | null>(null);
@@ -102,10 +245,12 @@ function Content() {
     setStatus(next);
   }, []);
 
-  const onGame = useCallback((appid: number) => {
-    void loadAndSampleArtwork(appid).catch((error) => console.warn("[SignalBar] artwork sampling failed", error));
-  }, [loadAndSampleArtwork]);
-  useSteamState(onGame);
+  useEffect(() => {
+    if (!status) return;
+    void loadAndSampleArtwork(status.game.appid).catch((error) => {
+      console.warn("[SignalBar] artwork preview failed", error);
+    });
+  }, [status?.game.appid, status?.artwork_source, loadAndSampleArtwork]);
 
   if (!status) {
     return <PanelSection><PanelSectionRow>Loading SignalBar…</PanelSectionRow></PanelSection>;
@@ -152,34 +297,6 @@ function Content() {
             {status.suspension_reason ? <div style={{ opacity: 0.72 }}>{status.suspension_reason}</div> : null}
           </div>
         </PanelSectionRow>
-        <PanelSectionRow>
-          <ToggleField
-            label="Show debug details"
-            checked={showDebug}
-            onChange={setShowDebug}
-          />
-        </PanelSectionRow>
-        {showDebug ? (
-          <>
-            <PanelSectionRow>
-              <div style={{ width: "100%", fontSize: ".76em", opacity: 0.78, overflowWrap: "anywhere" }}>
-                <div>LED path: {status.debug.led_path}</div>
-                <div>Last write: {status.debug.last_write ? `${status.debug.last_write.toFixed(2)} monotonic` : "never"}</div>
-                <div>Writes: {status.debug.writes}</div>
-                <div>Last external: {status.debug.last_external ? status.debug.last_external.toFixed(2) : "never"}</div>
-                <div>Cooldown: {status.debug.cooldown_remaining.toFixed(1)}s</div>
-              </div>
-            </PanelSectionRow>
-            <PanelSectionRow>
-              <ToggleField
-                label="Reverse physical LED order"
-                description="Enabled for the official Steam Machine orientation. Previews stay left-to-right."
-                checked={status.reverse_led_order}
-                onChange={async (value) => setStatus(await setSetting("reverse_led_order", value))}
-              />
-            </PanelSectionRow>
-          </>
-        ) : null}
       </PanelSection>
 
       <PanelSection title="Mode">
@@ -323,17 +440,89 @@ function Content() {
         </PanelSectionRow>
       </PanelSection>
 
+      <CountdownPanel status={status} setStatus={setStatus} />
+
+      <PanelSection title="Debug">
+        <PanelSectionRow>
+          <ToggleField
+            label="Show debug details"
+            checked={showDebug}
+            onChange={setShowDebug}
+          />
+        </PanelSectionRow>
+        {showDebug ? (
+          <>
+            <PanelSectionRow>
+              <div style={{ width: "100%", fontSize: ".76em", opacity: 0.78, overflowWrap: "anywhere" }}>
+                <div>LED path: {status.debug.led_path}</div>
+                <div>Last LED write: {formatAge(status.debug.last_write_age_s)}</div>
+                <div>Total LED writes: {status.debug.writes}</div>
+                <div>
+                  Ownership guard: {status.debug.guard_state === "blocked"
+                    ? `blocked · ${status.debug.guard_reason}`
+                    : "ready"}
+                </div>
+                <div>
+                  Guard timers: cooldown {status.debug.cooldown_remaining.toFixed(1)} s
+                  {" · "}stability {status.debug.stable_remaining.toFixed(1)} s
+                </div>
+                <div>Last external LED change: {formatAge(status.debug.last_external_age_s)}</div>
+                <div>
+                  Game detection: {status.debug.game_detection_source}
+                  {status.debug.game_sync_ms == null ? "" : ` · backend ${Math.round(status.debug.game_sync_ms)} ms`}
+                </div>
+                <div>
+                  Steam Families callback: {status.debug.parental_callback_state === "waiting"
+                    ? `waiting ${status.debug.parental_wait_s?.toFixed(1) ?? "0.0"} s`
+                    : status.debug.parental_callback_state === "received"
+                      ? `received after ${Math.round(status.debug.parental_callback_delay_ms ?? 0)} ms`
+                      : status.debug.parental_callback_state}
+                </div>
+              </div>
+            </PanelSectionRow>
+            <PanelSectionRow>
+              <ToggleField
+                label="Reverse physical LED order"
+                description="Enabled for the official Steam Machine orientation. Previews stay left-to-right."
+                checked={status.reverse_led_order}
+                onChange={async (value) => setStatus(await setSetting("reverse_led_order", value))}
+              />
+            </PanelSectionRow>
+            <PanelSectionRow>
+              <SliderField
+                label="Extra dark LEDs"
+                description={status.countdown.active && !status.countdown.alerting
+                  ? `Countdown only · ${status.countdown.logical_lit} shown in preview → ${status.countdown.physical_lit} lit on hardware.`
+                  : "Countdown only. This never changes Artwork or Performance. The preview keeps the logical LED count."}
+                value={status.countdown_dark_edge_compensation}
+                min={0}
+                max={6}
+                step={1}
+                showValue
+                valueSuffix=""
+                onChange={async (value) => setStatus(await setSetting("countdown_dark_edge_compensation", value))}
+              />
+            </PanelSectionRow>
+          </>
+        ) : null}
+      </PanelSection>
+
     </>
   );
 }
 
-export default definePlugin(() => ({
-  name: "SignalBar",
-  titleView: <div className={staticClasses.Title}>SignalBar</div>,
-  content: <Content />,
-  icon: <FaSignal />,
-  alwaysRender: true,
-  onDismount() {
-    console.log("[SignalBar] frontend dismounted");
-  },
-}));
+export default definePlugin(() => {
+  // Decky invokes this initializer once when it loads the frontend bundle.
+  // Runtime signals must start here, not when the user first opens the panel.
+  const runtime = startSignalBarRuntime();
+  return {
+    name: "SignalBar",
+    titleView: <div className={staticClasses.Title}>SignalBar</div>,
+    content: <Content />,
+    icon: <FaSignal />,
+    alwaysRender: true,
+    onDismount() {
+      runtime.stop();
+    },
+  };
+});

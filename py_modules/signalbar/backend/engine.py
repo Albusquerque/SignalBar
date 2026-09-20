@@ -12,7 +12,7 @@ import time
 from signalbar.arbiter import Arbiter, VanillaGuard
 from signalbar.hardware import ValveLedHardware
 from signalbar.models import GameState
-from signalbar.providers import ArtworkProvider, IdleProvider, PerformanceProvider
+from signalbar.providers import ArtworkProvider, CountdownProvider, IdleProvider, PerformanceProvider
 from signalbar.renderer import Renderer
 
 
@@ -22,6 +22,7 @@ class Engine:
         self.log = logger
         self.hardware_factory = hardware_factory
         self.artwork = ArtworkProvider(cache_path)
+        self.countdown = CountdownProvider()
         self.performance = PerformanceProvider()
         self.idle = IdleProvider()
         self.arbiter = Arbiter()
@@ -39,6 +40,14 @@ class Engine:
         self._suspension_reason = "starting"
         self._error = ""
         self._available = False
+        self._runtime_debug = {
+            "appid": 0,
+            "game_detection_source": "startup",
+            "game_sync_ms": None,
+            "parental_callback_state": "idle",
+            "parental_callback_delay_ms": None,
+            "parental_wait_started_at": 0.0,
+        }
 
     def _info(self, message):
         if self.log:
@@ -75,6 +84,10 @@ class Engine:
         with self._lock:
             changed = appid != self._game.appid
             self._game = GameState(appid, str(title or ""))
+            if changed:
+                # A Steam Families deadline belongs to the game session that
+                # produced it. Never leak it into the next game or after exit.
+                self.countdown.stop("parental")
             if changed or not self._game.running:
                 self.artwork.clear()
                 self._artwork_identity = None
@@ -116,8 +129,84 @@ class Engine:
                 self._steam_active_until = 0.0
                 self._steam_reason = ""
 
+    def report_runtime_diagnostic(self, event, appid=0, source="", duration_ms=-1):
+        """Record frontend lifecycle timings without affecting provider policy."""
+        try:
+            appid = max(0, int(appid or 0))
+            duration_ms = max(0.0, float(duration_ms))
+        except (TypeError, ValueError):
+            return
+        event = str(event or "")
+        now = time.monotonic()
+        with self._lock:
+            if event == "game_synced":
+                self._runtime_debug.update({
+                    "appid": appid,
+                    "game_detection_source": str(source or "unknown")[:48],
+                    "game_sync_ms": duration_ms,
+                    "parental_callback_state": (
+                        "waiting" if appid > 0 and self.settings.all()["parental_countdown_enabled"]
+                        else "disabled" if appid > 0 else "idle"
+                    ),
+                    "parental_callback_delay_ms": None,
+                    "parental_wait_started_at": now if appid > 0 else 0.0,
+                })
+            elif event == "parental_received" and appid == self._runtime_debug["appid"]:
+                self._runtime_debug.update({
+                    "parental_callback_state": "received",
+                    "parental_callback_delay_ms": duration_ms,
+                    "parental_wait_started_at": 0.0,
+                })
+
+    def report_parental_minutes(self, minutes):
+        try:
+            minutes = float(minutes)
+        except (TypeError, ValueError):
+            return
+        values = self.settings.all()
+        with self._lock:
+            game_running = self._game.running
+        if not values["parental_countdown_enabled"] or not game_running:
+            self.countdown.stop("parental")
+            return
+        # SteamUI uses values above one day as the no-active-limit sentinel.
+        if minutes <= 0:
+            self.countdown.stop("parental")
+            return
+        if minutes > 1440:
+            self.countdown.stop("parental")
+            return
+        self.countdown.start(
+            "parental", minutes * 60.0,
+            label="Steam Families",
+        )
+
+    def start_free_timer(self, minutes):
+        values = self.settings.update({"free_timer_minutes": minutes})
+        duration = values["free_timer_minutes"] * 60.0
+        self.countdown.start("free", duration, total_seconds=duration, label="Free timer")
+
+    def stop_free_timer(self):
+        self.countdown.stop("free")
+
+    def preview_countdown(self):
+        self.countdown.start("preview", 15.0, total_seconds=15.0, label="Preview")
+
     def update_settings(self, changes):
         values = self.settings.update(changes)
+        if "parental_countdown_enabled" in changes and not values["parental_countdown_enabled"]:
+            # Turning the feature off is an immediate cancellation, not only
+            # a visual filter. Later callbacks are ignored until re-enabled.
+            self.countdown.stop("parental")
+            with self._lock:
+                self._runtime_debug["parental_callback_state"] = "disabled"
+                self._runtime_debug["parental_wait_started_at"] = 0.0
+        elif "parental_countdown_enabled" in changes:
+            with self._lock:
+                if self._game.running:
+                    self._runtime_debug["parental_callback_state"] = "waiting"
+                    self._runtime_debug["parental_callback_delay_ms"] = None
+                    self._runtime_debug["parental_wait_started_at"] = time.monotonic()
         with self._lock:
             if self._guard:
                 self._guard.cooldown_s = values["guard_cooldown_s"]
@@ -181,9 +270,18 @@ class Engine:
                     enabled=(values["mode"] == "performance"),
                 )
                 artwork = self.artwork.output(game.appid)
+                signal = self.countdown.output(
+                    colour=values["countdown_colour"],
+                    dark_edge_compensation=values["countdown_dark_edge_compensation"],
+                    full_bar_seconds=values["countdown_full_bar_minutes"] * 60.0,
+                    allow_parental=(
+                        values["parental_countdown_enabled"] and game.running
+                    ),
+                )
                 decision = self.arbiter.choose(
                     mode=values["mode"], guard_allows=allowed, game=game,
                     performance=performance, artwork=artwork, idle=self.idle.output(),
+                    signal=signal,
                 )
 
                 if decision.frame is not None:
@@ -219,14 +317,36 @@ class Engine:
 
     def status(self):
         values = self.settings.all()
+        now = time.monotonic()
         sample = self.performance.sample
         art = self.artwork.status()
         with self._lock:
             artwork_settings = self.settings.artwork_for(self._game.appid)
+            countdown = self.countdown.status(
+                colour=values["countdown_colour"],
+                dark_edge_compensation=values["countdown_dark_edge_compensation"],
+                full_bar_seconds=values["countdown_full_bar_minutes"] * 60.0,
+                allow_parental=(
+                    values["parental_countdown_enabled"] and self._game.running
+                ),
+            )
             renderer = self._renderer
             guard = self._guard
+            last_write_at = renderer.last_successful_write_at if renderer else 0.0
+            last_external_at = guard.last_external_at if guard else 0.0
+            guard_debug = guard.debug_status() if guard else {
+                "ready": False,
+                "reason": "not initialized",
+                "cooldown_remaining": 0.0,
+                "stable_remaining": 0.0,
+            }
+            runtime_debug = dict(self._runtime_debug)
+            wait_started = runtime_debug.pop("parental_wait_started_at", 0.0)
+            runtime_debug["parental_wait_s"] = (
+                max(0.0, now - wait_started) if wait_started else None
+            )
             return {
-                "version": "0.2.1",
+                "version": "0.3.0",
                 "available": self._available,
                 "active": self._owner == "SignalBar",
                 "owner": self._owner,
@@ -244,6 +364,11 @@ class Engine:
                 "cool_temp_c": values["cool_temp_c"],
                 "hot_temp_c": values["hot_temp_c"],
                 "reverse_led_order": values["reverse_led_order"],
+                "parental_countdown_enabled": values["parental_countdown_enabled"],
+                "countdown_colour": values["countdown_colour"],
+                "countdown_full_bar_minutes": values["countdown_full_bar_minutes"],
+                "countdown_dark_edge_compensation": values["countdown_dark_edge_compensation"],
+                "free_timer_minutes": values["free_timer_minutes"],
                 "game": {"appid": self._game.appid, "title": self._game.title},
                 "performance": {
                     "gpu_load": sample.gpu_load,
@@ -252,12 +377,19 @@ class Engine:
                     "cpu_temperature": sample.cpu_temp_c,
                 },
                 "artwork": art,
+                "countdown": countdown,
                 "debug": {
                     "led_path": renderer.hardware.device_path if renderer else "/sys/class/leds/valve-leds[*]",
                     "last_write": renderer.last_write_at if renderer else 0.0,
+                    "last_write_age_s": max(0.0, now - last_write_at) if last_write_at else None,
                     "writes": renderer.writes if renderer else 0,
                     "last_external": guard.last_external_at if guard else 0.0,
-                    "cooldown_remaining": guard.remaining() if guard else 0.0,
+                    "last_external_age_s": max(0.0, now - last_external_at) if last_external_at else None,
+                    "cooldown_remaining": guard_debug["cooldown_remaining"],
+                    "stable_remaining": guard_debug["stable_remaining"],
+                    "guard_state": "ready" if guard_debug["ready"] else "blocked",
+                    "guard_reason": guard_debug["reason"],
                     "reverse_led_order": values["reverse_led_order"],
+                    **runtime_debug,
                 },
             }

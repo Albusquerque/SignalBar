@@ -6,14 +6,26 @@
 
 - **Providers** collect or hold facts and produce optional 17-pixel frames.
   `PerformanceProvider` reads local CPU/GPU Linux metrics at 2 Hz,
-  `ArtworkProvider` owns validated/cacheable browser samples, and
+  `ArtworkProvider` owns validated/cacheable browser samples,
+  `CountdownProvider` owns independent parental/free/preview deadlines, and
   `IdleProvider` deliberately emits no frame (Vanilla).
-- **Arbiter** is pure policy. Valve/explicit Steam activity is above every
-  SignalBar provider. The user's explicit Artwork or Performance mode selects
-  that provider; Disabled selects Idle and returns control to Valve.
+- **Arbiter** is pure policy. Disabled is an explicit user stop. Otherwise
+  Valve/explicit Steam activity is above every SignalBar provider, Steam
+  Families is above the personal timer, and an active timer is above the
+  user's explicit Artwork or Performance provider.
 - **Renderer** is the only production component holding the hardware adapter.
   It validates exactly 17 RGB pixels, serializes access, coalesces identical
   frames, rate-limits writes, reads back the actual signature and fails closed.
+
+## Startup lifecycle
+
+Decky's one-time frontend plugin initializer starts a background SignalBar
+runtime immediately when the bundle loads. That runtime reports the already
+running game, polls as a fallback, subscribes to game lifetime, Steam Families,
+download and resume events, and samples local Artwork without waiting for the
+settings panel to mount. Backend calls that race plugin startup are retried.
+The panel is only a view and settings surface; closing or never opening it does
+not stop providers. `onDismount` unregisters every Steam callback and timer.
 
 ## Vanilla Guard
 
@@ -61,6 +73,40 @@ Frames are always logical left-to-right. The hardware adapter reverses the
 physical sysfs path order by default for the official Steam Machine, so UI
 previews and the user's physical viewpoint agree without contaminating provider
 logic.
+
+## Countdown signals
+
+Parental, free and preview timers keep separate monotonic deadlines. Preview
+has deliberate short-lived priority; otherwise Steam Families is authoritative
+over the personal timer and appears only while a game is active. The frontend
+re-registers Steam's remaining-time callback on each game launch. The callback
+is registered only after the backend accepts the new AppID, because
+Steam may answer synchronously. Disabling parental display, leaving the game or
+switching AppID deletes that session's parental state, including its final alert.
+The lit portion occupies the logical left side, so its disappearing edge moves
+right-to-left. A persisted 0–6 physical dark-edge compensation counters
+light-guide bloom; it defaults to three and is applied only by CountdownProvider.
+Artwork and Performance frames bypass it. Status exposes the uncompensated logical
+frame for Decky plus logical/physical lit counts, while Renderer receives the
+compensated frame. Full bars remain 17 pixels and a running timer retains at
+least one physical pixel.
+A rendering scale of zero uses the timer's initial duration. Fixed 1–4 hour
+scales map that remaining window to 17 pixels and clamp longer durations to a
+full bar. Preview deliberately ignores the fixed scale.
+A brighter highlight circulates right-to-left. Below five minutes the palette
+becomes constant pure red; circulation remains the sole animation until the
+final eight seconds. Then a three-white-flash pattern repeats until zero before
+the arbiter returns immediately to the unchanged base provider.
+
+## Runtime diagnostics
+
+Frontend lifecycle milestones are reported to the backend without influencing
+provider policy. Debug exposes the game detection source, backend RPC latency,
+and elapsed time waiting for Steam's parental callback. Renderer retains the
+last successful-write timestamp across relinquish operations. Vanilla Guard
+reports cooldown and stable-window time independently, avoiding a misleading
+zero cooldown while stability is still pending. Debug is rendered last in the
+Decky panel.
 
 ## Extending providers
 

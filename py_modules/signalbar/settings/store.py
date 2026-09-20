@@ -20,6 +20,12 @@ DEFAULTS = {
     "cool_temp_c": 50.0,
     "hot_temp_c": 90.0,
     "reverse_led_order": True,
+    "parental_countdown_enabled": True,
+    "countdown_colour": "cyan",
+    # 0 follows the timer's initial duration; otherwise this is fixed minutes.
+    "countdown_full_bar_minutes": 0,
+    "countdown_dark_edge_compensation": 3,
+    "free_timer_minutes": 60,
     "guard_cooldown_s": 5.0,
     "guard_stable_s": 2.0,
 }
@@ -30,6 +36,7 @@ VALID_ARTWORK_SOURCES = {"hero", "header", "capsule"}
 VALID_PERFORMANCE_METRICS = {"cpu", "gpu", "mixed"}
 VALID_MIXED_DIRECTIONS = {"same", "mirrored"}
 VALID_TEMPERATURE_PALETTES = {"thermal", "classic", "icefire"}
+VALID_COUNTDOWN_COLOURS = {"cyan", "green", "amber", "violet", "white"}
 
 
 class SettingsStore:
@@ -70,6 +77,26 @@ class SettingsStore:
         if self._data["temperature_palette"] not in VALID_TEMPERATURE_PALETTES:
             self._data["temperature_palette"] = DEFAULTS["temperature_palette"]
         self._data["reverse_led_order"] = bool(self._data["reverse_led_order"])
+        self._data["parental_countdown_enabled"] = bool(self._data["parental_countdown_enabled"])
+        if self._data["countdown_colour"] not in VALID_COUNTDOWN_COLOURS:
+            self._data["countdown_colour"] = DEFAULTS["countdown_colour"]
+        try:
+            full_bar_minutes = int(round(float(self._data["countdown_full_bar_minutes"])))
+            self._data["countdown_full_bar_minutes"] = (
+                full_bar_minutes if full_bar_minutes in {0, 60, 120, 180, 240} else 0
+            )
+        except (TypeError, ValueError):
+            self._data["countdown_full_bar_minutes"] = DEFAULTS["countdown_full_bar_minutes"]
+        try:
+            self._data["countdown_dark_edge_compensation"] = max(
+                0, min(6, int(round(float(self._data["countdown_dark_edge_compensation"]))))
+            )
+        except (TypeError, ValueError):
+            self._data["countdown_dark_edge_compensation"] = DEFAULTS["countdown_dark_edge_compensation"]
+        try:
+            self._data["free_timer_minutes"] = max(5, min(240, int(round(float(self._data["free_timer_minutes"])))))
+        except (TypeError, ValueError):
+            self._data["free_timer_minutes"] = DEFAULTS["free_timer_minutes"]
         self._data["artwork_manual_y"] = max(0.15, min(0.90, float(self._data["artwork_manual_y"])))
         self._data["cool_temp_c"] = max(20.0, min(100.0, float(self._data["cool_temp_c"])))
         self._data["hot_temp_c"] = max(self._data["cool_temp_c"] + 1.0, min(120.0, float(self._data["hot_temp_c"])))

@@ -18,6 +18,7 @@ class Renderer:
         self._last_frame: Optional[Frame] = None
         self._last_signature = None
         self._last_write_at = 0.0
+        self._last_successful_write_at = 0.0
         self._saved_frame: Optional[Frame] = None
         self._failed = False
         self._writes = 0
@@ -37,6 +38,10 @@ class Renderer:
     @property
     def last_write_at(self):
         return self._last_write_at
+
+    @property
+    def last_successful_write_at(self):
+        return self._last_successful_write_at
 
     @property
     def writes(self):
@@ -62,6 +67,7 @@ class Renderer:
                 raise
             self._last_frame = clean
             self._last_write_at = now
+            self._last_successful_write_at = now
             self._writes += 1
             return True
 

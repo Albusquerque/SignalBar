@@ -16,3 +16,13 @@ export const submitArtwork = callable<[
   source: string,
 ], Status>("submit_artwork");
 export const setSteamActivity = callable<[active: boolean, reason: string], boolean>("set_steam_activity");
+export const reportRuntimeDiagnostic = callable<[
+  event: string,
+  appid: number,
+  source: string,
+  durationMs: number,
+], boolean>("report_runtime_diagnostic");
+export const reportParentalMinutes = callable<[minutes: number], Status>("report_parental_minutes");
+export const startFreeTimer = callable<[minutes: number], Status>("start_free_timer");
+export const stopFreeTimer = callable<[], Status>("stop_free_timer");
+export const previewCountdown = callable<[], Status>("preview_countdown");

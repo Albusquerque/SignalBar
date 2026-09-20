@@ -70,3 +70,24 @@ class Plugin:
     async def set_steam_activity(self, active: bool, reason: str = "Steam event"):
         self.engine.set_steam_activity(active, reason)
         return True
+
+    async def report_runtime_diagnostic(self, event: str, appid: int = 0,
+                                        source: str = "", duration_ms: float = -1):
+        self.engine.report_runtime_diagnostic(event, appid, source, duration_ms)
+        return True
+
+    async def report_parental_minutes(self, minutes: float):
+        self.engine.report_parental_minutes(minutes)
+        return self.engine.status()
+
+    async def start_free_timer(self, minutes: int):
+        self.engine.start_free_timer(minutes)
+        return self.engine.status()
+
+    async def stop_free_timer(self):
+        self.engine.stop_free_timer()
+        return self.engine.status()
+
+    async def preview_countdown(self):
+        self.engine.preview_countdown()
+        return self.engine.status()

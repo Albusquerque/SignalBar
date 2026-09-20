@@ -56,6 +56,24 @@ class VanillaGuard:
     def remaining(self):
         return max(0.0, self._blocked_until - self._clock())
 
+    def debug_status(self):
+        now = self._clock()
+        cooldown_remaining = max(0.0, self._blocked_until - now)
+        stable_remaining = max(0.0, self.stable_s - (now - self._last_change_at))
+        ready = cooldown_remaining <= 0 and stable_remaining <= 0
+        if ready:
+            reason = ""
+        elif cooldown_remaining > 0:
+            reason = self._reason or "cooldown"
+        else:
+            reason = "waiting for stable LED state"
+        return {
+            "ready": ready,
+            "reason": reason,
+            "cooldown_remaining": cooldown_remaining,
+            "stable_remaining": stable_remaining,
+        }
+
 
 class ManualClock:
     """Tiny deterministic clock used by tests."""
@@ -67,4 +85,3 @@ class ManualClock:
 
     def advance(self, seconds):
         self.value += float(seconds)
-

@@ -4,6 +4,7 @@ export type ArtworkSource = "hero" | "header" | "capsule";
 export type PerformanceMetric = "cpu" | "gpu" | "mixed";
 export type MixedDirection = "same" | "mirrored";
 export type TemperaturePalette = "thermal" | "classic" | "icefire";
+export type CountdownColour = "cyan" | "green" | "amber" | "violet" | "white";
 export type RGB = [number, number, number];
 
 export interface Status {
@@ -25,6 +26,11 @@ export interface Status {
   cool_temp_c: number;
   hot_temp_c: number;
   reverse_led_order: boolean;
+  parental_countdown_enabled: boolean;
+  countdown_colour: CountdownColour;
+  countdown_full_bar_minutes: 0 | 60 | 120 | 180 | 240;
+  countdown_dark_edge_compensation: number;
+  free_timer_minutes: number;
   game: { appid: number; title: string };
   performance: {
     gpu_load: number | null;
@@ -33,13 +39,36 @@ export interface Status {
     cpu_temperature: number | null;
   };
   artwork: { sample_y?: number; filename?: string; colors?: RGB[] };
+  countdown: {
+    active: boolean;
+    source: "" | "parental" | "free" | "preview";
+    label: string;
+    remaining_seconds: number;
+    total_seconds: number;
+    scale_seconds: number;
+    alerting: boolean;
+    logical_lit: number;
+    physical_lit: number;
+    colors: RGB[];
+  };
   debug: {
     led_path: string;
     last_write: number;
+    last_write_age_s: number | null;
     writes: number;
     last_external: number;
+    last_external_age_s: number | null;
     cooldown_remaining: number;
+    stable_remaining: number;
+    guard_state: "ready" | "blocked";
+    guard_reason: string;
     reverse_led_order: boolean;
+    appid: number;
+    game_detection_source: string;
+    game_sync_ms: number | null;
+    parental_callback_state: "idle" | "disabled" | "waiting" | "received";
+    parental_callback_delay_ms: number | null;
+    parental_wait_s: number | null;
   };
 }
 

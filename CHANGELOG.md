@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.3.0 — 2026-09-20
+
+- Start game detection, Artwork sampling, Performance activation, Steam
+  Families observation, download ownership and suspend/resume handling as soon
+  as Decky loads the plugin; opening SignalBar's settings is no longer required.
+
+- Re-register Steam Families remaining-time observation when a game launches,
+  keep parental time above personal timers and both base display modes, and
+  hide parental time while no game is running.
+- Cancel parental state immediately when its setting is disabled, the game is
+  closed or another game starts, including during the final flash sequence.
+- Clear stale running-game state on termination and resume from suspend instead
+  of restoring Artwork from the last game.
+- Move Playtime countdown below Performance in the Decky panel.
+- Use constant pure red during the final five minutes and keep only the
+  right-to-left circulation, avoiding two simultaneous animations.
+- Repeat three brief full-white flashes during the final eight seconds of a
+  countdown, then return immediately to the selected base provider at zero.
+- Add optical dark-edge compensation for the Steam Machine's diffused light
+  guide while retaining all 17 pixels at a full countdown.
+- Make that physical compensation persistent and adjustable from 0–6 under
+  Debug. The Decky preview retains the logical count: 12 shown with a value of
+  3 writes 9 lit LEDs to the hardware. It applies only to countdown frames,
+  never Artwork or Performance.
+- Add a selectable countdown scale: start full, or map the full 17-pixel bar to
+  1, 2, 3 or 4 hours. Longer remaining times stay full until that window.
+- Move Debug to the bottom and replace raw monotonic values with useful ages,
+  separate cooldown/stability timers, game detection source, backend sync time
+  and Steam Families callback waiting/received latency.
+
+- Added a temporary playtime countdown that automatically returns to the
+  selected Artwork or Performance display when it ends.
+- Added Steam Families remaining-time support through SteamUI's parental
+  playtime callback, with an independent enable/disable setting.
+- Added a free 5–240 minute personal timer that continues while the Decky
+  panel is closed, plus a non-destructive 15-second preview.
+- Added five starting colours, a shrinking right edge and a right-to-left
+  travelling highlight. The signal turns amber below 15 minutes, then pure red
+  below five minutes while circulation continues at constant brightness.
+- Added deterministic provider, priority, direction, colour and persistence
+  tests for the countdown feature.
+
 ## 0.2.1 — 2026-09-20
 
 - Replaced Automatic with explicit Artwork, Performance and Disabled modes;
