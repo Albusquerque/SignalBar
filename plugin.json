@@ -1,0 +1,11 @@
+{
+  "name": "SignalBar",
+  "author": "SignalBar contributors",
+  "flags": ["root"],
+  "api_version": 1,
+  "publish": {
+    "tags": ["system", "utility", "root"],
+    "description": "Smart status lighting for the official Steam Machine light bar."
+  }
+}
+
