@@ -4,7 +4,7 @@ export type ArtworkSource = "hero" | "header" | "capsule";
 export type PerformanceMetric = "cpu" | "gpu" | "mixed";
 export type PerformanceSmoothing = "responsive" | "balanced" | "smooth";
 export type MixedDirection = "same" | "mirrored";
-export type TemperaturePalette = "thermal" | "classic" | "icefire";
+export type TemperaturePalette = "thermal" | "classic" | "icefire" | "custom";
 export type CountdownColour = "cyan" | "green" | "amber" | "violet" | "white";
 export type RGB = [number, number, number];
 
@@ -19,8 +19,12 @@ export interface Status {
   mode: Mode;
   performance_metric: PerformanceMetric;
   performance_smoothing: PerformanceSmoothing;
+  performance_always: boolean;
   mixed_direction: MixedDirection;
   temperature_palette: TemperaturePalette;
+  temperature_custom_cool: RGB;
+  temperature_custom_middle: RGB;
+  temperature_custom_hot: RGB;
   artwork_mode: ArtworkMode;
   artwork_manual_y: number;
   artwork_source: ArtworkSource;
@@ -33,6 +37,23 @@ export interface Status {
   countdown_full_bar_minutes: 0 | 60 | 120 | 180 | 240;
   countdown_dark_edge_compensation: number;
   free_timer_minutes: number;
+  events_enabled: boolean;
+  event_notifications_enabled: boolean;
+  event_achievements_enabled: boolean;
+  event_screenshots_enabled: boolean;
+  event_recording_enabled: boolean;
+  recording_marker_isolation: boolean;
+  event_notification_variant: string;
+  event_achievement_variant: string;
+  event_screenshot_variant: string;
+  events: {
+    active: boolean;
+    kind: string;
+    variant: string;
+    recording: boolean;
+    queued: number;
+    colors: RGB[];
+  };
   game: { appid: number; title: string };
   performance: {
     gpu_load: number | null;

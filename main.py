@@ -91,3 +91,6 @@ class Plugin:
     async def preview_countdown(self):
         self.engine.preview_countdown()
         return self.engine.status()
+
+    async def trigger_event(self, kind: str, preview: bool = False, variant: str = ""):
+        return self.engine.trigger_event(kind, preview, variant)

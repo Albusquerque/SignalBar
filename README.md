@@ -1,141 +1,193 @@
 # SignalBar
 
-**Smart status lighting for Steam Machine**
+**Smart status lighting for the official Steam Machine**
 
-SignalBar turns the official Steam Machine's 17-pixel light bar into a compact
-system display. It is deliberately Valve-first: when Steam or another process
-changes the LEDs, SignalBar yields, waits through a cooldown and a stable
-period, then considers resuming.
+Make your Steam Machine's 17-pixel light bar useful and a little more
+expressive. Choose a persistent display, then let playtime warnings and short
+Steam moments take the stage before your display returns.
 
-### Artwork mode
+[Download SignalBar v0.4.0](https://github.com/Albusquerque/SignalBar/releases/download/v0.4.0/SignalBar-v0.4.0.zip)
 
-![SignalBar Artwork mode sampling a Deep Rock Galactic Library Header](assets/signalbar-artwork-mode-v1.png)
+## Your everyday display
 
-The sampled 17-colour row is previewed in Decky and reproduced across the
-machine's thin diffused light bar.
+### Artwork
 
-### Performance mode
+Carry the current game's colours onto the light bar. Choose Library Hero,
+Header, or Capsule artwork and select the best row automatically or manually.
+The choice is remembered separately for every game.
 
-![SignalBar mixed CPU and GPU performance meter](assets/signalbar-performance-mode-v1.png)
+Local custom artwork is preferred, including SteamGridDB replacements and
+images assigned to non-Steam shortcuts. In Artwork mode, the quick Decky panel
+shows the active game image directly above its exact 17-colour sample.
 
-The mixed meter dedicates eight LEDs to CPU load, one dark centre separator,
-and eight LEDs to GPU load. The physical diffuser softens individual emitters;
-the Decky preview keeps the 17 logical cells visible.
+![Artwork mode with Deep Rock Galactic artwork](assets/signalbar-artwork-mode-v1.png)
+
+### Performance
+
+Use the bar for CPU, GPU, or both. Mixed mode gives each signal eight LEDs,
+with the centre LED off. Length shows load and colour shows temperature.
+Responsive, Balanced, and Smooth profiles control how quickly the meter reacts.
+
+Performance can be limited to game sessions or kept active on the Steam home
+screen. Three ready-made temperature palettes are included, and a native Decky
+colour picker lets you choose custom Cool, Middle, and Hot colours.
+
+![Animated mixed CPU and GPU meter](assets/readme-gifs/performance.gif)
 
 ### Playtime Countdown
 
-An active Steam Families limit takes priority while a game is running; an
-optional personal timer provides the same signal without parental controls.
-Both temporarily replace Artwork or Performance. The bar empties from right to
-left, turns amber and then red as time runs out, and repeats three brief white
-flashes during the final eight seconds before automatically returning to the
-selected display.
+See the time you have left. An active Steam Families limit automatically takes
+priority when a game starts, or you can start a personal timer. The bar empties
+from right to left, turns amber below 15 minutes, and turns red below five.
+During the final eight seconds, three short white flashes repeat until zero.
 
-*Interface visualisations reflect the implemented controls; exact
-SteamOS rendering can vary by Decky/Steam version.*
+![Animated playtime countdown](assets/readme-gifs/countdown.gif)
 
-## v0.3.2-beta.1 — custom Steam artwork preview
+## Light events
 
-Artwork now picks up images installed through Steam's local custom-grid system,
-including SteamGridDB replacements and non-Steam shortcuts. A custom Hero,
-Header or Capsule takes priority over the corresponding unmodified Steam Store
-image. If a non-Steam shortcut lacks the selected image type, SignalBar uses
-another available custom image. Discovery is local, read-only and requires no
-SteamGridDB API key. This beta has automated coverage but still needs a check
-on Steam Machine hardware; v0.3.1 remains the latest stable release.
+Light events briefly replace the current display, play their animation, then
+restore the live Artwork or Performance state. They can work outside a game.
+Each category has its own switch, animation selector, and nearby live preview.
 
-## v0.3.1
+### Notification
 
-v0.3.1 extends the **Extra dark LEDs** optical calibration to Performance.
-The default remains three: Decky continues to show the logical meter, while
-the physical bar lights three fewer LEDs so dark sections remain distinct
-through the Steam Machine's diffuser. Mixed CPU/GPU mode shares those three
-extra dark LEDs across both halves, and Artwork is not affected. It also adds
-Responsive, Balanced and Smooth meter-response profiles. Balanced is the
-default and reduces abrupt CPU/GPU oscillation while keeping sustained load
-changes visible.
+A cyan call travels across the whole strip and echoes back into quiet.
 
-## v0.3.0 — hardware-tested release
+![Wide echo notification](assets/readme-gifs/notification.gif)
 
-v0.3.0 is the first release to make SignalBar a persistent background signal
-system rather than a panel-driven effect. The complete upgrade path from
-v0.2.1 has been tested on the official Steam Machine hardware: SignalBar starts
-with Decky, follows game launches and exits, restores the selected base mode,
-and displays Steam Families or personal countdowns without requiring the
-settings panel to be opened first.
+### Screenshot
 
-### What's new since v0.2.1
+An icy shutter closes, followed by two flashes with expanding echoes.
 
-- Background activation at Decky plugin load: current-game detection, Artwork
-  sampling, Performance, Steam Families, downloads and suspend/resume handling
-  work without first opening SignalBar's settings panel.
-- Strict arbitration keeps ownership predictable: Valve/system activity first,
-  then an explicit Preview, Steam Families, the personal timer, and finally the
-  selected Artwork or Performance mode. Disabled always returns control to
-  Valve.
-- Game exit, AppID changes, parental-display disable and resume from suspend
-  clear stale game/countdown state immediately. Artwork from the previous game
-  can no longer remain active after that game closes.
-- Explicit Artwork, Performance and Disabled modes. Artwork and Performance
-  are alternatives and never overwrite or blend with each other.
-- Local Steam Library Hero, Header or Capsule sampling: six automatic candidate
-  rows, Centre, Lower, or a manual vertical position; exactly 17
-  left-to-right RGB pixels. The Decky panel shows the game title rather than
-  an internal cache filename.
-- Artwork source and row choices are persisted per AppID. A new game starts
-  from the default; changing either setting creates that game's own profile.
-- CPU, GPU and mixed meters. Mixed uses 8 LEDs for CPU, one black separator,
-  and 8 LEDs for GPU. Its halves can both grow left-to-right or mirror from
-  the outside edges toward the centre. Lit length represents load and colour
-  represents temperature.
-- Three named temperature palettes with explicit Cool and Hot temperature
-  thresholds. Colours blend continuously between those thresholds.
-- Physical LED order is reversed by default to match the official Steam
-  Machine while every software preview remains visually left-to-right.
-- Steam Families remaining-time countdown and a free 5–240 minute personal
-  timer. Steam Families has strict priority over the personal timer and the
-  selected Artwork or Performance display while a game is running. The bar
-  shrinks from the right with a configurable 0–6-pixel optical compensation
-  for the physical diffuser and carries a right-to-left highlight. Debug shows
-  the logical-to-physical mapping; the default compensation is three.
-- Below 15 minutes the countdown turns amber; below five minutes it becomes
-  pure red and keeps only the right-to-left circulation. During the final eight
-  seconds, three brief full-white flashes repeat until zero, before the base
-  display returns immediately.
-- Five selectable starting colours and a 15-second countdown preview that
-  includes the final alert; testing never cancels a real timer.
-- Selectable full-bar scale: start full from the timer's initial duration, or
-  make 17 LEDs represent the final 1, 2, 3 or 4 hours.
-- The Debug section now reports game-detection source, backend synchronization,
-  Steam Families callback latency, last LED-write age, external-change age and
-  the guard's cooldown/stability state. Its optical compensation slider affects
-  countdowns only.
-- Userspace Vanilla Guard, redundant-frame suppression, serialized sysfs writes
-  and a minimum 50 ms hardware-write interval.
-- No telemetry, cloud service, network call, SteamOS read-only modification, or
-  shell command at runtime.
+![Expanding echo screenshot animation](assets/readme-gifs/screenshot.gif)
+
+### Achievement
+
+A constellation appears, connects in both directions, and celebrates with two
+full-bar bursts.
+
+![Constellation achievement animation](assets/readme-gifs/achievement.gif)
+
+### Recording
+
+Two red traces mark recording start and stop. While recording, the centre LED
+stays pure red over Artwork or Performance. Its two neighbours are black by
+default to keep the marker distinct through the physical diffuser. The marker
+never modifies a playtime countdown or another event animation.
+
+![Recording start, centre marker, and stop](assets/readme-gifs/recording.gif)
+
+## How priorities work
+
+SignalBar follows a strict order:
+
+1. Disabled returns complete control to Steam.
+2. A new native LED write interrupts SignalBar and is never overwritten by a
+   stale frame.
+3. The final five minutes of a countdown are protected from light events.
+4. Short light events and manual previews temporarily replace non-critical
+   displays.
+5. Steam Families and personal countdowns replace the selected base display.
+6. Artwork or Performance provides the normal persistent display.
 
 ## Install
 
-1. Install Decky Loader and enable Developer Mode.
-2. In Decky settings, choose **Developer → Install Plugin from ZIP** and select
-   `SignalBar-v0.3.2-beta.1.zip`.
-3. Restart Decky Loader if the panel does not appear immediately.
+### Decky Loader
 
-Manual installation is also possible by extracting the ZIP into
-`~/homebrew/plugins/`, leaving a `SignalBar/` directory, then restarting
-`plugin_loader`.
+1. Install [Decky Loader](https://decky.xyz/) and enable Developer Mode.
+2. Download `SignalBar-v0.4.0.zip` from the GitHub release. Do not extract it.
+3. Open **Decky Settings > Developer > Install Plugin from ZIP**.
+4. Select the downloaded archive.
+5. Restart Decky Loader if SignalBar does not appear immediately.
 
-SignalBar requests Decky's root flag solely because the kernel's
-`/sys/class/leds/valve-leds[*]/multi_intensity` files require it.
+### Manual installation
 
-## Uninstall
+Extract the archive into `~/homebrew/plugins/` so the result is a
+`~/homebrew/plugins/SignalBar/` directory, then restart `plugin_loader`.
 
-Use Decky's plugin settings to uninstall SignalBar. The backend stops writing
-and only restores its startup frame if the current hardware state still matches
-SignalBar's own last verified write. It never restores over a detected external
-change. Settings live in Decky's normal plugin settings directory and may be
-removed separately if desired.
+SignalBar requests Decky's root flag only because the Steam Machine exposes its
+light bar through root-owned `valve-leds` sysfs files.
+
+## First setup
+
+1. Open SignalBar in Decky's quick-access menu.
+2. Choose **Artwork**, **Performance**, or **Disabled**.
+3. Open **Detailed settings** for Artwork, Performance, Playtime, Light events,
+   and Advanced options.
+4. Use Preview to try each animation before enabling live light events.
+
+Live Light events are disabled by default.
+
+## Configuration
+
+### Artwork
+
+- Library Hero, Header, or vertical Capsule
+- Automatic, centre, lower, or manual sample row
+- Red line over the image showing the selected manual row
+- Saved source and position for each game
+- Local SteamGridDB and non-Steam custom artwork support
+
+Steam's Library Logo is not sampled because it is a transparent foreground
+layer rather than a complete image.
+
+### Performance
+
+- CPU, GPU, or mixed CPU + GPU
+- Both meters left to right, or mirrored toward the centre
+- Responsive, Balanced, or Smooth filtering
+- Optional always-on display outside games
+- Three built-in temperature palettes
+- Custom Cool, Middle, and Hot colours through Decky's colour picker
+- Live CPU/GPU load and temperature in the quick panel
+
+`Cool temperature` and `Hot temperature` are thresholds. The selected colour
+palette is blended continuously between them.
+
+### Playtime
+
+- Automatic Steam Families remaining-time signal
+- Personal timer from five to 240 minutes
+- Five starting colours
+- Timer-duration scale or fixed one, two, three, or four-hour full bar
+- Final eight-second alert
+
+Steam Families only appears while a game is running. Closing or switching games
+clears the old parental countdown immediately.
+
+### Optical calibration
+
+The physical diffuser can make a lit LED bleed into a neighbouring dark space.
+**Extra dark LEDs** compensates by lighting fewer physical pixels than the
+logical preview. It affects Countdown and Performance, never Artwork. The
+default is two.
+
+The official Steam Machine's physical LED order is reversed by default while
+the Decky preview remains left to right.
+
+## Safety and privacy
+
+- No telemetry, cloud service, account login, or runtime network request
+- No SteamOS read-only filesystem modification
+- Local read-only discovery of Steam and custom-grid artwork
+- Serialized and rate-limited hardware writes
+- Redundant-frame suppression to reduce unnecessary LED writes
+- A userspace guard that yields when Steam or another process changes the bar
+
+SignalBar only restores a previous frame when the hardware still matches its
+own last verified write.
+
+## Requirements and known limits
+
+- Designed for the official Steam Machine 17-pixel `valve-leds` light bar
+- Requires Decky Loader on SteamOS
+- CPU and GPU sensors depend on paths exposed by the hardware and SteamOS build
+- Steam notifications and recording use private SteamClient callbacks that may
+  change between Steam builds
+- Achievement animations follow Steam's achievement notification
+- Screenshot animations follow a newly written screenshot file
+- No Internet artwork fallback, audio visualizer, FPS, network, controller,
+  storage, Moonlight, or Sunshine provider yet
 
 ## Build and test
 
@@ -146,99 +198,15 @@ npm run build
 npm run package
 ```
 
-The release archive is written to `out/SignalBar-v0.3.2-beta.1.zip`.
+The installable archive is written to `out/SignalBar-v0.4.0.zip`.
 
-## Display modes and performance
+See [ARCHITECTURE.md](ARCHITECTURE.md) for provider, arbitration, guard, and
+hardware-rendering details. Release history is available in
+[CHANGELOG.md](CHANGELOG.md).
 
-Performance and Artwork are alternative full-bar providers; they are not
-overlaid. Select **Artwork** to display the current game's sampled image, or
-**Performance** for the selected CPU, GPU or mixed meter. **Disabled** returns
-control to Valve. Configurations saved by v0.2's former Automatic mode migrate
-to Performance when its performance priority was enabled, otherwise Artwork.
+## Uninstall and license
 
-Steam defines four Library asset roles. SignalBar offers the three complete
-image formats that are useful for colour sampling: **Library Hero** (wide
-background), **Library Header** and **Library Capsule** (vertical). Library
-Logo is deliberately excluded because it is a transparent foreground overlay
-intended to sit over the Hero rather than a complete game image.
-SignalBar checks the active account's locally installed custom images first;
-SteamGridDB's Decky plugin uses these same Steam grid files. If the selected
-role is unavailable for a non-Steam shortcut, another custom image can be used
-instead. The artwork preview identifies its actual source.
+Use Decky's plugin settings to uninstall SignalBar. Settings remain in Decky's
+normal plugin settings directory and can be removed separately if desired.
 
-`Cool temperature` is the point where the selected palette starts. `Hot
-temperature` is the point where it reaches its final hot colour. Between them,
-SignalBar blends continuously; below/above them it clamps to the endpoint
-colour. These controls are temperature thresholds, not colour pickers—the
-separate `Temperature colours` menu chooses the palette.
-
-`Meter response` controls load smoothing separately for CPU and GPU.
-**Responsive** follows short changes closely, **Balanced** confirms falling
-values and uses a slower decay to reduce visual yoyo, and **Smooth** favours a
-steadier display. The percentage shown in Decky is the same filtered value used
-to calculate LED length; `Last LED write` is the age of the most recent write,
-not the duration of a hardware operation.
-
-## Playtime countdowns
-
-SignalBar listens locally for SteamUI's Steam Families remaining-playtime
-callback. When a restriction is active, the first observed remaining value
-becomes the visual full scale in `Timer duration` mode; fixed scales instead use
-their selected 1–4 hour window. The bar subsequently empties toward the left.
-Values over 24 hours are treated like SteamUI's no-active-limit sentinel.
-The setting can be disabled independently without affecting a personal timer.
-Disabling it, closing the game or switching games immediately clears the
-parental countdown and its final alert; a new game must provide a fresh Steam
-Families value.
-
-The free timer uses active elapsed time and keeps running when the Decky panel is
-closed. Steam Families is shown only while a game is running and has priority
-over a simultaneous free timer. The selected starting colour turns amber below
-15 minutes, then pure red below five minutes while the circulation continues at
-constant brightness. During the final eight seconds, three brief white flashes
-repeat until zero. The 15-second Preview demonstrates the countdown and final
-alert without cancelling either real timer. All countdowns remain
-below Valve/system ownership and are suppressed when Display is Disabled.
-
-The Debug setting **Extra dark LEDs** calibrates physical diffuser bloom without
-changing the logical Decky preview. It accepts 0–6 and defaults to 3. For both
-Countdown and Performance, 12 cells in the preview therefore write 9 lit LEDs
-to the hardware. Countdown keeps a completely full 17-LED bar intact;
-Performance also applies the selected value at 100% load. Mixed CPU/GPU shares
-one compensation across both halves and retains one physical LED for every
-active half. Artwork is never altered.
-
-**Full bar scale** controls time mapping. `Timer duration` starts every real
-timer at 17 LEDs. Fixed 1/2/3/4-hour scales make 17 LEDs represent that remaining
-window; a longer limit stays full until it enters the window. The 15-second
-Preview always uses its own complete scale so the animation remains testable.
-
-Debug is the final panel section. It reports human-readable age since the last
-LED write and external change, separate guard cooldown and stability timers,
-the game detection source, backend synchronization latency, and whether Steam
-Families is idle, disabled, waiting, or received after a measured delay.
-
-## Known limits
-
-- Vanilla Guard is a conservative userspace observer, not a Valve protocol or
-  kernel ownership lock. It can detect a changed sysfs state only after that
-  change becomes visible. The Decky frontend additionally leases ownership to
-  Steam on native download callbacks, but that private SteamClient hook may
-  vary between Steam builds.
-- A Valve animation that repeatedly writes the same observable value cannot be
-  distinguished from a stable LED state. SignalBar therefore also requires a
-  startup settle, cooldown, and stable window before resuming.
-- GPU discovery targets DRM `gpu_busy_percent` and device hwmon. CPU load comes
-  from `/proc/stat`; CPU temperature prefers k10temp/coretemp/zenpower hwmon and
-  then thermal zones. A missing selected metric is shown as unavailable; switch
-  to Artwork explicitly if a performance sensor is not available.
-- v0.2's physical reversal is based on the supplied official-hardware photo and
-  user test. The Debug panel exposes an override for diagnosis.
-- The main v0.3.0 lifecycle, per-game Artwork persistence, Performance display,
-  Steam Families countdown and final alert have been tested on the official
-  Steam Machine. Private SteamClient callbacks and available CPU/GPU sensor
-  paths can still vary with future SteamOS or Decky builds.
-- v0.3.2-beta.1 intentionally has no Internet artwork fallback, audio/VU, network,
-  FPS, Moonlight/Sunshine, controller, or storage providers.
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for design details.
+SignalBar is released under the [BSD 3-Clause License](LICENSE).

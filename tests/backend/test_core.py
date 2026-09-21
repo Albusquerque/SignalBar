@@ -169,6 +169,9 @@ class CoreTests(unittest.TestCase):
     def test_temperature_thresholds_and_palette_are_explicit(self):
         self.assertEqual(temperature_color(50, 50, 90, "classic"), (35, 205, 95))
         self.assertEqual(temperature_color(90, 50, 90, "classic"), (235, 45, 55))
+        custom = ((12, 34, 56), (78, 90, 123), (210, 220, 230))
+        self.assertEqual(temperature_color(50, 50, 90, "custom", custom), custom[0])
+        self.assertEqual(temperature_color(90, 50, 90, "custom", custom), custom[2])
 
     def test_countdown_shrinks_and_comet_moves_right_to_left(self):
         first = countdown_frame(50, 100, "cyan", elapsed_seconds=0)
@@ -340,6 +343,9 @@ class CoreTests(unittest.TestCase):
         idle = ProviderOutput("idle", None, "Vanilla")
         self.assertEqual(arbiter.choose(mode="artwork", guard_allows=False, game=game, performance=performance, artwork=artwork, idle=idle).provider, "valve")
         self.assertEqual(arbiter.choose(mode="performance", guard_allows=True, game=game, performance=performance, artwork=artwork, idle=idle).provider, "performance")
+        no_game = GameState()
+        self.assertEqual(arbiter.choose(mode="performance", guard_allows=True, game=no_game, performance=performance, artwork=artwork, idle=idle).provider, "none")
+        self.assertEqual(arbiter.choose(mode="performance", guard_allows=True, game=no_game, performance=performance, artwork=artwork, idle=idle, performance_always=True).provider, "performance")
         self.assertEqual(arbiter.choose(mode="artwork", guard_allows=True, game=game, performance=performance, artwork=artwork, idle=idle, signal=ProviderOutput("countdown", RED, "timer")).provider, "countdown")
         self.assertEqual(arbiter.choose(mode="performance", guard_allows=True, game=game, performance=performance, artwork=artwork, idle=idle, signal=ProviderOutput("countdown", RED, "timer")).provider, "countdown")
         self.assertEqual(arbiter.choose(mode="disabled", guard_allows=True, game=game, performance=performance, artwork=artwork, idle=idle, signal=ProviderOutput("countdown", RED, "timer")).provider, "none")
@@ -425,16 +431,26 @@ class PersistenceTests(unittest.TestCase):
             self.assertEqual(loaded["mode"], "artwork")
             self.assertEqual(loaded["artwork_manual_y"], 0.90)
             self.assertEqual(loaded["performance_smoothing"], "balanced")
+            self.assertFalse(loaded["performance_always"])
             self.assertEqual(json.loads(Path(path).read_text())["mode"], "artwork")
 
             store.update({"performance_smoothing": "invalid"})
             self.assertEqual(store.all()["performance_smoothing"], "balanced")
+            store.update({
+                "temperature_palette": "custom",
+                "temperature_custom_cool": [-8, 64.4, 999],
+                "temperature_custom_middle": "invalid",
+            })
+            self.assertEqual(store.all()["temperature_palette"], "custom")
+            self.assertEqual(store.all()["temperature_custom_cool"], [0, 64, 255])
+            self.assertEqual(store.all()["temperature_custom_middle"], [245, 180, 45])
 
     def test_countdown_settings_persist_and_validate(self):
         with tempfile.TemporaryDirectory() as directory:
             path = str(Path(directory) / "config.json")
             store = SettingsStore(path)
-            self.assertEqual(store.all()["countdown_dark_edge_compensation"], 3)
+            self.assertEqual(store.all()["countdown_dark_edge_compensation"], 2)
+            self.assertTrue(store.all()["recording_marker_isolation"])
             store.update({
                 "parental_countdown_enabled": False,
                 "countdown_colour": "violet",

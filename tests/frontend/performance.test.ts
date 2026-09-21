@@ -1,13 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { performancePreview, temperatureColor } from "../../src/performance";
+import { hslStringToRgb, performancePreview, rgbToHsl, temperatureColor } from "../../src/performance";
 import type { Status } from "../../src/types";
 
 const status = {
   performance_metric: "mixed",
   mixed_direction: "mirrored",
   temperature_palette: "classic",
+  temperature_custom_cool: [10, 20, 30],
+  temperature_custom_middle: [70, 80, 90],
+  temperature_custom_hot: [220, 230, 240],
   cool_temp_c: 50,
   hot_temp_c: 90,
   performance: {
@@ -21,6 +24,19 @@ const status = {
 test("temperature colours use named thresholds and selected palette", () => {
   assert.deepEqual(temperatureColor(50, 50, 90, "classic"), [35, 205, 95]);
   assert.deepEqual(temperatureColor(90, 50, 90, "classic"), [235, 45, 55]);
+});
+
+test("custom temperature colours and Decky HSL picker round-trip", () => {
+  assert.deepEqual(temperatureColor(50, 50, 90, "custom", [
+    status.temperature_custom_cool,
+    status.temperature_custom_middle,
+    status.temperature_custom_hot,
+  ]), [10, 20, 30]);
+  const source = [30, 180, 230] as [number, number, number];
+  const [h, s, l] = rgbToHsl(source);
+  const restored = hslStringToRgb(`hsla(${h}, ${s}%, ${l}%, 1)`);
+  assert.ok(restored);
+  restored.forEach((channel, index) => assert.ok(Math.abs(channel - source[index]) <= 2));
 });
 
 test("mixed preview can use two left-to-right meters", () => {

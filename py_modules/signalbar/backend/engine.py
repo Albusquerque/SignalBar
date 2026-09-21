@@ -12,7 +12,7 @@ import time
 from signalbar.arbiter import Arbiter, VanillaGuard
 from signalbar.hardware import ValveLedHardware
 from signalbar.models import GameState
-from signalbar.providers import ArtworkProvider, CountdownProvider, IdleProvider, PerformanceProvider
+from signalbar.providers import ArtworkProvider, CountdownProvider, EventProvider, IdleProvider, PerformanceProvider
 from signalbar.renderer import Renderer
 
 
@@ -24,6 +24,8 @@ class Engine:
         self.artwork = ArtworkProvider(cache_path)
         self.countdown = CountdownProvider()
         self.performance = PerformanceProvider()
+        self.events = EventProvider()
+        self.events.set_variants(settings.all())
         self.idle = IdleProvider()
         self.arbiter = Arbiter()
         self._lock = threading.RLock()
@@ -71,6 +73,8 @@ class Engine:
         if thread and thread.is_alive():
             thread.join(timeout=2.0)
         with self._lock:
+            self.events.clear_transients()
+            self.events.clear_recording()
             if self._renderer:
                 self._renderer.relinquish(restore_if_owned=True)
             self._owner = "Valve"
@@ -88,6 +92,7 @@ class Engine:
                 # A Steam Families deadline belongs to the game session that
                 # produced it. Never leak it into the next game or after exit.
                 self.countdown.stop("parental")
+                self.events.clear_recording()
             if changed or not self._game.running:
                 self.artwork.clear()
                 self._artwork_identity = None
@@ -192,8 +197,53 @@ class Engine:
     def preview_countdown(self):
         self.countdown.start("preview", 15.0, total_seconds=15.0, label="Preview")
 
+    def trigger_event(self, kind, preview=False, variant=""):
+        values = self.settings.all()
+        kind = str(kind or "")
+        if values["mode"] == "disabled":
+            return False
+        if not preview:
+            setting = {
+                "notification": "event_notifications_enabled",
+                "achievement": "event_achievements_enabled",
+                "screenshot": "event_screenshots_enabled",
+                "record-start": "event_recording_enabled",
+                "record-stop": "event_recording_enabled",
+            }.get(kind)
+            if not values["events_enabled"] or not setting or not values[setting]:
+                return False
+        with self._lock:
+            game_running = self._game.running
+        countdown = self.countdown.status(
+            allow_parental=values["parental_countdown_enabled"] and game_running,
+        )
+        if countdown["active"] and countdown["remaining_seconds"] <= 300:
+            # Recording state still follows Steam, but the warning is never
+            # visually interrupted, even for a fraction of one render tick.
+            if kind in {"record-start", "record-stop"} and not preview:
+                self.events.trigger(kind)
+                self.events.clear_transients()
+            return False
+        return self.events.trigger(kind, preview=bool(preview), variant=variant)
+
     def update_settings(self, changes):
         values = self.settings.update(changes)
+        self.events.set_variants(values)
+        if not values["events_enabled"] or not values["event_recording_enabled"]:
+            self.events.clear_recording()
+        if not values["events_enabled"]:
+            self.events.clear_transients()
+        elif values["mode"] == "disabled":
+            self.events.clear_transients()
+        else:
+            for key, kinds in (
+                ("event_notifications_enabled", ("notification",)),
+                ("event_achievements_enabled", ("achievement",)),
+                ("event_screenshots_enabled", ("screenshot",)),
+                ("event_recording_enabled", ("record-start", "record-stop")),
+            ):
+                if key in changes and not values[key]:
+                    self.events.cancel_kinds(kinds)
         if "parental_countdown_enabled" in changes and not values["parental_countdown_enabled"]:
             # Turning the feature off is an immediate cancellation, not only
             # a visual filter. Later callbacks are ignored until re-enabled.
@@ -217,6 +267,9 @@ class Engine:
         hardware = None
         renderer = None
         guard = None
+        interval = 0.10
+        event_was_active = False
+        event_preempted_valve = False
         while not self._stop.is_set():
             if hardware is None:
                 try:
@@ -239,7 +292,7 @@ class Engine:
                         break
                     continue
 
-            if self._stop.wait(0.10):
+            if self._stop.wait(interval):
                 break
             try:
                 now = time.monotonic()
@@ -255,6 +308,12 @@ class Engine:
                     explicit = now < self._steam_active_until
                     explicit_reason = self._steam_reason
                 signature = hardware.read_signature()
+                # A new native write during our animation ends that animation
+                # immediately; otherwise the two writers would fight each tick.
+                event_interrupted = (
+                    event_was_active and renderer.last_signature is not None
+                    and signature != renderer.last_signature
+                )
                 allowed = guard.observe(
                     signature,
                     expected_signature=renderer.last_signature,
@@ -270,6 +329,11 @@ class Engine:
                     dark_edge_compensation=values["countdown_dark_edge_compensation"],
                     smoothing=values["performance_smoothing"],
                     enabled=(values["mode"] == "performance"),
+                    custom_palette=(
+                        values["temperature_custom_cool"],
+                        values["temperature_custom_middle"],
+                        values["temperature_custom_hot"],
+                    ),
                 )
                 artwork = self.artwork.output(game.appid)
                 signal = self.countdown.output(
@@ -280,22 +344,56 @@ class Engine:
                         values["parental_countdown_enabled"] and game.running
                     ),
                 )
+                countdown_state = self.countdown.status(
+                    allow_parental=values["parental_countdown_enabled"] and game.running,
+                )
+                signal_critical = (
+                    countdown_state["active"] and countdown_state["remaining_seconds"] <= 300
+                )
+                if signal_critical:
+                    self.events.clear_transients()
+                if event_interrupted:
+                    self.events.clear_transients()
+                event = self.events.output()
+                # Moving event waves need more than ten samples per second to
+                # visibly visit all 17 positions. Normal providers stay at
+                # the conservative 10 Hz cadence.
+                interval = 0.06 if event.frame is not None else 0.10
                 decision = self.arbiter.choose(
                     mode=values["mode"], guard_allows=allowed, game=game,
                     performance=performance, artwork=artwork, idle=self.idle.output(),
-                    signal=signal,
+                    signal=signal, event=event, signal_critical=signal_critical,
+                    recording_marker=(
+                        self.events.recording and values["events_enabled"]
+                        and values["event_recording_enabled"]
+                    ),
+                    recording_marker_isolation=values["recording_marker_isolation"],
+                    performance_always=values["performance_always"],
                 )
 
                 if decision.frame is not None:
+                    is_event = decision.provider.startswith("event:")
+                    if is_event and not allowed:
+                        event_preempted_valve = True
+                    elif not is_event:
+                        event_preempted_valve = False
                     wrote = renderer.render(decision.frame)
                     if wrote:
                         guard.note_own_write(renderer.last_signature)
                     owner = "SignalBar"
                     suspension = ""
+                    event_was_active = is_event
                 else:
                     externally_blocked = decision.provider == "valve"
                     if renderer.last_frame is not None:
-                        renderer.relinquish(restore_if_owned=not externally_blocked)
+                        # After a short event over a stable Valve frame, put
+                        # that exact frame back. Renderer verifies ownership
+                        # first, so a concurrent native write is never undone.
+                        renderer.relinquish(
+                            restore_if_owned=not externally_blocked or event_preempted_valve
+                        )
+                    event_was_active = False
+                    event_preempted_valve = False
                     owner = "Valve"
                     suspension = guard.reason if externally_blocked else decision.reason
 
@@ -354,6 +452,11 @@ class Engine:
                 palette=values["temperature_palette"],
                 direction=values["mixed_direction"],
                 dark_edge_compensation=0,
+                custom_palette=(
+                    values["temperature_custom_cool"],
+                    values["temperature_custom_middle"],
+                    values["temperature_custom_hot"],
+                ),
             )
             physical_performance = self.performance.frame(
                 metric=values["performance_metric"],
@@ -362,9 +465,14 @@ class Engine:
                 palette=values["temperature_palette"],
                 direction=values["mixed_direction"],
                 dark_edge_compensation=values["countdown_dark_edge_compensation"],
+                custom_palette=(
+                    values["temperature_custom_cool"],
+                    values["temperature_custom_middle"],
+                    values["temperature_custom_hot"],
+                ),
             )
             return {
-                "version": "0.3.2-beta.1",
+                "version": "0.4.0",
                 "available": self._available,
                 "active": self._owner == "SignalBar",
                 "owner": self._owner,
@@ -374,8 +482,12 @@ class Engine:
                 "mode": values["mode"],
                 "performance_metric": values["performance_metric"],
                 "performance_smoothing": values["performance_smoothing"],
+                "performance_always": values["performance_always"],
                 "mixed_direction": values["mixed_direction"],
                 "temperature_palette": values["temperature_palette"],
+                "temperature_custom_cool": values["temperature_custom_cool"],
+                "temperature_custom_middle": values["temperature_custom_middle"],
+                "temperature_custom_hot": values["temperature_custom_hot"],
                 "artwork_mode": artwork_settings["mode"],
                 "artwork_manual_y": artwork_settings["manual_y"],
                 "artwork_source": artwork_settings["source"],
@@ -388,6 +500,16 @@ class Engine:
                 "countdown_full_bar_minutes": values["countdown_full_bar_minutes"],
                 "countdown_dark_edge_compensation": values["countdown_dark_edge_compensation"],
                 "free_timer_minutes": values["free_timer_minutes"],
+                "events_enabled": values["events_enabled"],
+                "event_notifications_enabled": values["event_notifications_enabled"],
+                "event_achievements_enabled": values["event_achievements_enabled"],
+                "event_screenshots_enabled": values["event_screenshots_enabled"],
+                "event_recording_enabled": values["event_recording_enabled"],
+                "recording_marker_isolation": values["recording_marker_isolation"],
+                "event_notification_variant": values["event_notification_variant"],
+                "event_achievement_variant": values["event_achievement_variant"],
+                "event_screenshot_variant": values["event_screenshot_variant"],
+                "events": self.events.status(),
                 "game": {"appid": self._game.appid, "title": self._game.title},
                 "performance": {
                     "gpu_load": sample.gpu_load,

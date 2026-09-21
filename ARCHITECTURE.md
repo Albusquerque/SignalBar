@@ -7,12 +7,19 @@
 - **Providers** collect or hold facts and produce optional 17-pixel frames.
   `PerformanceProvider` reads local CPU/GPU Linux metrics at 2 Hz,
   `ArtworkProvider` owns validated/cacheable browser samples,
-  `CountdownProvider` owns independent parental/free/preview deadlines, and
+  `CountdownProvider` owns independent parental/free/preview deadlines,
+  `EventProvider` owns short queued animations and recording state, and
   `IdleProvider` deliberately emits no frame (Vanilla).
-- **Arbiter** is pure policy. Disabled is an explicit user stop. Otherwise
-  Valve/explicit Steam activity is above every SignalBar provider, Steam
+- **Arbiter** is pure policy. Disabled is an explicit user stop. Short, opted-in
+  events can play over a stable native frame even when no game is running.
+  Otherwise Valve/explicit Steam activity is above SignalBar providers, Steam
   Families is above the personal timer, and an active timer is above the
-  user's explicit Artwork or Performance provider.
+  user's explicit Artwork or Performance provider. Transient events may briefly
+  replace a non-critical timer; its final five minutes cannot be interrupted.
+  A recording marker may decorate only a base display. Its centre pixel
+  replaces, rather than blends with, the base colour. Optional isolation makes
+  its immediate neighbours black to reduce optical bleed through the diffuser;
+  this isolation is enabled by default.
 - **Renderer** is the only production component holding the hardware adapter.
   It validates exactly 17 RGB pixels, serializes access, coalesces identical
   frames, rate-limits writes, reads back the actual signature and fails closed.
@@ -26,6 +33,27 @@ download and resume events, and samples local Artwork without waiting for the
 settings panel to mount. Backend calls that race plugin startup are retried.
 The panel is only a view and settings surface; closing or never opening it does
 not stop providers. `onDismount` unregisters every Steam callback and timer.
+Steam notification types supply generic notices, achievements and recording
+transitions. The GameSessions screenshot hook accepts only written captures;
+the generic screenshot type is fallback. The frontend sends only a validated
+event kind to the backend, never notification contents.
+
+## Light-event arbitration
+
+All animations start from a dark frame, suspend the selected base for 1.2–4.85
+seconds, and expire by monotonic time. A per-category variant is validated and
+persisted; queued effects retain the variant selected when they arrived, while
+a manual preview plays immediately without changing the saved choice. At most
+three pending effects queue; near-duplicate callbacks are coalesced. The current Artwork/Performance frame
+or still-running countdown is recomputed after the animation. Critical
+countdowns clear pending effects. Disabled is checked before event selection.
+An event may take over a stable native frame, which Renderer snapshots and
+restores only if its last write is still present. A fresh native write during
+the animation cancels it immediately, without restoring the stale snapshot.
+Recording start
+sets a persistent centre marker over Artwork or Performance after its transient
+effect; stop removes it, and game exit clears it. It is never applied to a
+countdown or event frame. Previews do not set that persistent state.
 
 ## Vanilla Guard
 
@@ -43,8 +71,8 @@ Native download callbacks in the Decky frontend create short renewable Steam
 activity leases so the backend can yield before or during a known transition.
 The lease expires automatically if the frontend vanishes.
 
-No kernel module, Steam hook, read-only OS modification, animation emulation or
-ownership fight is used.
+No kernel module, binary patch, read-only OS modification or ownership fight
+is used.
 
 ## Artwork flow
 
@@ -67,7 +95,14 @@ the left 8 pixels, keeps the centre pixel black, and maps GPU to the right 8.
 The user can make both halves grow left-to-right, or mirror the GPU half so the
 two signals grow from the outside edges toward the separator. Colour comes
 from a selected three-stop palette and blends continuously between configurable
-Cool and Hot temperature thresholds.
+Cool and Hot temperature thresholds. Built-in palettes live in provider code;
+the custom palette is persisted as three validated RGB triplets and follows the
+same interpolation path in both the backend renderer and frontend preview.
+
+Performance normally becomes eligible only while a game is running. The
+optional `performance_always` setting also makes it eligible on the Steam home
+screen, without bypassing Vanilla Guard or changing the priority of countdowns
+and events.
 
 The persisted 0–6 **Extra dark LEDs** value is applied only to the physical
 Performance frame; the Decky preview remains logical. Full CPU/GPU meters also
@@ -99,7 +134,7 @@ Steam may answer synchronously. Disabling parental display, leaving the game or
 switching AppID deletes that session's parental state, including its final alert.
 The lit portion occupies the logical left side, so its disappearing edge moves
 right-to-left. The shared persisted 0–6 physical dark-edge compensation counters
-light-guide bloom in Countdown and Performance and defaults to three. Status
+light-guide bloom in Countdown and Performance and defaults to two. Status
 exposes uncompensated logical frames plus logical/physical lit counts, while
 Renderer receives compensated frames. Countdown full bars remain 17 pixels and
 a running timer retains at least one physical pixel. Artwork bypasses the

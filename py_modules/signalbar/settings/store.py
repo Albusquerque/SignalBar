@@ -12,8 +12,12 @@ DEFAULTS = {
     "performance_enabled": True,
     "performance_metric": "gpu",
     "performance_smoothing": "balanced",
+    "performance_always": False,
     "mixed_direction": "mirrored",
     "temperature_palette": "thermal",
+    "temperature_custom_cool": [30, 180, 230],
+    "temperature_custom_middle": [245, 180, 45],
+    "temperature_custom_hot": [235, 45, 55],
     "artwork_mode": "auto",
     "artwork_manual_y": 0.72,
     "artwork_source": "hero",
@@ -25,8 +29,19 @@ DEFAULTS = {
     "countdown_colour": "cyan",
     # 0 follows the timer's initial duration; otherwise this is fixed minutes.
     "countdown_full_bar_minutes": 0,
-    "countdown_dark_edge_compensation": 3,
+    "countdown_dark_edge_compensation": 2,
     "free_timer_minutes": 60,
+    # Beta feature is opt-in; preview buttons still work before enabling it.
+    "events_enabled": False,
+    "event_notifications_enabled": True,
+    "event_achievements_enabled": True,
+    "event_screenshots_enabled": True,
+    "event_recording_enabled": True,
+    # Optional optical separation for the persistent red recording marker.
+    "recording_marker_isolation": True,
+    "event_notification_variant": "notification-original",
+    "event_achievement_variant": "achievement-original",
+    "event_screenshot_variant": "screenshot-original",
     "guard_cooldown_s": 5.0,
     "guard_stable_s": 2.0,
 }
@@ -37,8 +52,22 @@ VALID_ARTWORK_SOURCES = {"hero", "header", "capsule"}
 VALID_PERFORMANCE_METRICS = {"cpu", "gpu", "mixed"}
 VALID_PERFORMANCE_SMOOTHING = {"responsive", "balanced", "smooth"}
 VALID_MIXED_DIRECTIONS = {"same", "mirrored"}
-VALID_TEMPERATURE_PALETTES = {"thermal", "classic", "icefire"}
+VALID_TEMPERATURE_PALETTES = {"thermal", "classic", "icefire", "custom"}
 VALID_COUNTDOWN_COLOURS = {"cyan", "green", "amber", "violet", "white"}
+EVENT_VARIANTS = {
+    "event_notification_variant": {
+        "notification-original", "notification-return", "notification-echo",
+        "notification-ample", "notification-double", "notification-beacon",
+    },
+    "event_achievement_variant": {
+        "achievement-original", "achievement-confetti", "achievement-rebound",
+        "achievement-constellation", "achievement-twoway", "achievement-supernova",
+    },
+    "event_screenshot_variant": {
+        "screenshot-original", "screenshot-double", "screenshot-scan",
+        "screenshot-bloom", "screenshot-ripple",
+    },
+}
 
 
 class SettingsStore:
@@ -64,6 +93,7 @@ class SettingsStore:
 
     def _validate(self):
         self._data["performance_enabled"] = bool(self._data["performance_enabled"])
+        self._data["performance_always"] = bool(self._data["performance_always"])
         if self._data["mode"] == "automatic":
             self._data["mode"] = "performance" if self._data["performance_enabled"] else "artwork"
         elif self._data["mode"] not in VALID_MODES:
@@ -80,8 +110,27 @@ class SettingsStore:
             self._data["mixed_direction"] = DEFAULTS["mixed_direction"]
         if self._data["temperature_palette"] not in VALID_TEMPERATURE_PALETTES:
             self._data["temperature_palette"] = DEFAULTS["temperature_palette"]
+        for key in (
+            "temperature_custom_cool", "temperature_custom_middle", "temperature_custom_hot",
+        ):
+            value = self._data.get(key)
+            if not isinstance(value, (list, tuple)) or len(value) != 3:
+                self._data[key] = list(DEFAULTS[key])
+                continue
+            try:
+                self._data[key] = [max(0, min(255, int(round(float(channel))))) for channel in value]
+            except (TypeError, ValueError):
+                self._data[key] = list(DEFAULTS[key])
         self._data["reverse_led_order"] = bool(self._data["reverse_led_order"])
         self._data["parental_countdown_enabled"] = bool(self._data["parental_countdown_enabled"])
+        for key in (
+            "events_enabled", "event_notifications_enabled", "event_achievements_enabled",
+            "event_screenshots_enabled", "event_recording_enabled", "recording_marker_isolation",
+        ):
+            self._data[key] = bool(self._data[key])
+        for key, choices in EVENT_VARIANTS.items():
+            if not isinstance(self._data[key], str) or self._data[key] not in choices:
+                self._data[key] = DEFAULTS[key]
         if self._data["countdown_colour"] not in VALID_COUNTDOWN_COLOURS:
             self._data["countdown_colour"] = DEFAULTS["countdown_colour"]
         try:

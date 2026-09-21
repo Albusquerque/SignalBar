@@ -6,10 +6,11 @@ from .countdown import (
     countdown_frame,
 )
 from .idle import IdleProvider
+from .events import EventProvider, event_frame
 from .performance import PerformanceProvider, mixed_performance_frame, performance_frame, temperature_color
 
 __all__ = [
-    "ArtworkProvider", "CountdownProvider", "IdleProvider", "PerformanceProvider",
+    "ArtworkProvider", "CountdownProvider", "EventProvider", "IdleProvider", "PerformanceProvider",
     "COUNTDOWN_COLOURS", "countdown_final_alert_frame", "countdown_frame",
-    "mixed_performance_frame", "performance_frame", "temperature_color",
+    "event_frame", "mixed_performance_frame", "performance_frame", "temperature_color",
 ]

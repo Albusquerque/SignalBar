@@ -26,3 +26,4 @@ export const reportParentalMinutes = callable<[minutes: number], Status>("report
 export const startFreeTimer = callable<[minutes: number], Status>("start_free_timer");
 export const stopFreeTimer = callable<[], Status>("stop_free_timer");
 export const previewCountdown = callable<[], Status>("preview_countdown");
+export const triggerEvent = callable<[kind: string, preview: boolean, variant: string], boolean>("trigger_event");

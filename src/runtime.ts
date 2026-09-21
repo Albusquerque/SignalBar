@@ -7,9 +7,12 @@ import {
   reportRuntimeDiagnostic,
   setSteamActivity,
   submitArtwork,
+  triggerEvent,
 } from "./api";
 import { sampleArtwork } from "./artwork";
 import { normalizeAppId } from "./steam_app_id";
+import { classifySteamNotification, screenshotWasCaptured } from "./steam_events";
+import type { LightEvent } from "./steam_events";
 import type { Status } from "./types";
 
 declare const SteamClient: any;
@@ -52,6 +55,8 @@ class SignalBarRuntime {
   private downloadRegistration: Registration;
   private resumeRegistration: Registration;
   private parentalRegistration: Registration;
+  private notificationsRegistration: Registration;
+  private screenshotRegistration: Registration;
 
   start() {
     if (this.alive) return;
@@ -70,6 +75,8 @@ class SignalBarRuntime {
     this.downloadRegistration?.unregister?.();
     this.resumeRegistration?.unregister?.();
     this.parentalRegistration?.unregister?.();
+    this.notificationsRegistration?.unregister?.();
+    this.screenshotRegistration?.unregister?.();
     void setSteamActivity(false, "").catch(() => undefined);
     console.log("[SignalBar] background runtime stopped");
   }
@@ -193,6 +200,7 @@ class SignalBarRuntime {
 
   private registerSteamEvents() {
     this.registerParentalSignal(0);
+    this.registerLightEvents();
     try {
       this.gameRegistration = SteamClient?.GameSessions?.RegisterForAppLifetimeNotifications?.((event: any) => {
         const appid = normalizeAppId(event?.unAppID);
@@ -223,6 +231,37 @@ class SignalBarRuntime {
       });
     } catch (error) {
       console.warn("[SignalBar] Steam download hook unavailable", error);
+    }
+  }
+
+  private emitLightEvent(kind: LightEvent) {
+    if (!this.alive) return;
+    void triggerEvent(kind, false, "").catch((error) => {
+      console.warn(`[SignalBar] ${kind} event was not delivered`, error);
+    });
+  }
+
+  private registerLightEvents() {
+    try {
+      this.screenshotRegistration = SteamClient?.GameSessions?.RegisterForScreenshotNotification?.((notice: any) => {
+        if (screenshotWasCaptured(notice)) this.emitLightEvent("screenshot");
+      });
+    } catch (error) {
+      console.warn("[SignalBar] screenshot hook unavailable", error);
+    }
+    try {
+      // The callback's index identifies a notification-list position, not a
+      // durable event ID. Caching it could suppress later, unrelated notices.
+      this.notificationsRegistration = SteamClient?.Notifications?.RegisterForNotifications?.(
+        (_index: number, type: number) => {
+          if (!this.alive) return;
+          const kind = classifySteamNotification(Number(type));
+          if (!kind) return;
+          this.emitLightEvent(kind);
+        },
+      );
+    } catch (error) {
+      console.warn("[SignalBar] Steam notification hook unavailable", error);
     }
   }
 }

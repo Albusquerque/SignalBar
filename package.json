@@ -1,6 +1,6 @@
 {
   "name": "signalbar",
-  "version": "0.3.2-beta.1",
+  "version": "0.4.0",
   "description": "Smart status lighting for Steam Machine",
   "type": "module",
   "scripts": {
@@ -11,7 +11,13 @@
     "test:frontend": "tsx --test tests/frontend/*.test.ts",
     "package": "python3 scripts/package_plugin.py"
   },
-  "keywords": ["decky", "steam-machine", "steamos", "led", "status"],
+  "keywords": [
+    "decky",
+    "steam-machine",
+    "steamos",
+    "led",
+    "status"
+  ],
   "license": "BSD-3-Clause",
   "devDependencies": {
     "@decky/rollup": "^1.0.2",
@@ -30,7 +36,10 @@
   },
   "pnpm": {
     "peerDependencyRules": {
-      "ignoreMissing": ["react", "react-dom"]
+      "ignoreMissing": [
+        "react",
+        "react-dom"
+      ]
     }
   }
 }
