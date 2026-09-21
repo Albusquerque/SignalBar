@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.2-beta.1 — 2026-09-21
+
+- Prefer artwork installed locally through Steam's custom grid (including
+  SteamGridDB) over the unmodified Store image for the same game.
+- Support custom Hero, Header and Capsule images for non-Steam shortcuts, with
+  an available custom image as fallback when the selected role is missing.
+- Read the active Steam account's custom grid when known, without showing
+  another account's images; accept signed 32-bit shortcut AppIDs from SteamUI.
+- Keep artwork discovery local and read-only; no SteamGridDB API key or network
+  request is required.
+
 ## 0.3.1 — 2026-09-20
 
 - Extend the existing **Extra dark LEDs** optical calibration to Performance

@@ -9,17 +9,13 @@ import {
   submitArtwork,
 } from "./api";
 import { sampleArtwork } from "./artwork";
+import { normalizeAppId } from "./steam_app_id";
 import type { Status } from "./types";
 
 declare const SteamClient: any;
 declare const appStore: any;
 
 type Registration = { unregister?: () => void } | undefined;
-
-function normalizeAppId(value: unknown): number {
-  const number = Number(value ?? 0);
-  return Number.isFinite(number) && number > 0 ? Math.trunc(number) : 0;
-}
 
 function runningApp() {
   try {

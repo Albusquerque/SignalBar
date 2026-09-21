@@ -34,6 +34,16 @@ selected display.
 *Interface visualisations reflect the implemented controls; exact
 SteamOS rendering can vary by Decky/Steam version.*
 
+## v0.3.2-beta.1 — custom Steam artwork preview
+
+Artwork now picks up images installed through Steam's local custom-grid system,
+including SteamGridDB replacements and non-Steam shortcuts. A custom Hero,
+Header or Capsule takes priority over the corresponding unmodified Steam Store
+image. If a non-Steam shortcut lacks the selected image type, SignalBar uses
+another available custom image. Discovery is local, read-only and requires no
+SteamGridDB API key. This beta has automated coverage but still needs a check
+on Steam Machine hardware; v0.3.1 remains the latest stable release.
+
 ## v0.3.1
 
 v0.3.1 extends the **Extra dark LEDs** optical calibration to Performance.
@@ -109,7 +119,7 @@ settings panel to be opened first.
 
 1. Install Decky Loader and enable Developer Mode.
 2. In Decky settings, choose **Developer → Install Plugin from ZIP** and select
-   `SignalBar-v0.3.1.zip`.
+   `SignalBar-v0.3.2-beta.1.zip`.
 3. Restart Decky Loader if the panel does not appear immediately.
 
 Manual installation is also possible by extracting the ZIP into
@@ -136,7 +146,7 @@ npm run build
 npm run package
 ```
 
-The release archive is written to `out/SignalBar-v0.3.1.zip`.
+The release archive is written to `out/SignalBar-v0.3.2-beta.1.zip`.
 
 ## Display modes and performance
 
@@ -151,6 +161,10 @@ image formats that are useful for colour sampling: **Library Hero** (wide
 background), **Library Header** and **Library Capsule** (vertical). Library
 Logo is deliberately excluded because it is a transparent foreground overlay
 intended to sit over the Hero rather than a complete game image.
+SignalBar checks the active account's locally installed custom images first;
+SteamGridDB's Decky plugin uses these same Steam grid files. If the selected
+role is unavailable for a non-Steam shortcut, another custom image can be used
+instead. The artwork preview identifies its actual source.
 
 `Cool temperature` is the point where the selected palette starts. `Hot
 temperature` is the point where it reaches its final hot colour. Between them,
@@ -224,7 +238,7 @@ Families is idle, disabled, waiting, or received after a measured delay.
   Steam Families countdown and final alert have been tested on the official
   Steam Machine. Private SteamClient callbacks and available CPU/GPU sensor
   paths can still vary with future SteamOS or Decky builds.
-- v0.3.1 intentionally has no Internet artwork fallback, audio/VU, network,
+- v0.3.2-beta.1 intentionally has no Internet artwork fallback, audio/VU, network,
   FPS, Moonlight/Sunshine, controller, or storage providers.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for design details.

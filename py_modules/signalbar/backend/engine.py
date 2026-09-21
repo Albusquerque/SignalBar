@@ -364,7 +364,7 @@ class Engine:
                 dark_edge_compensation=values["countdown_dark_edge_compensation"],
             )
             return {
-                "version": "0.3.1",
+                "version": "0.3.2-beta.1",
                 "available": self._available,
                 "active": self._owner == "SignalBar",
                 "owner": self._owner,

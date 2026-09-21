@@ -1,4 +1,4 @@
-"""Read-only discovery of Steam's local Library artwork cache."""
+"""Read-only discovery of Steam's Library cache and custom grid artwork."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import glob
 import hashlib
 import mimetypes
 import os
+import re
 from pathlib import Path
 
 IMAGE_EXTENSIONS = ("jpg", "jpeg", "png", "webp")
@@ -24,6 +25,11 @@ ARTWORK_SOURCES = {
         "label": "Library Capsule",
         "stems": ("library_capsule", "library_600x900", "library_600x900_2x"),
     },
+}
+CUSTOM_GRID_SUFFIXES = {
+    "hero": "_hero",
+    "header": "",
+    "capsule": "p",
 }
 
 
@@ -47,8 +53,11 @@ def steam_roots():
 
     found, seen = [], set()
     for candidate in candidates:
-        key = str(candidate)
-        if key not in seen and (candidate / "appcache/librarycache").is_dir():
+        key = str(candidate.resolve())
+        if key not in seen and (
+            (candidate / "appcache/librarycache").is_dir()
+            or (candidate / "userdata").is_dir()
+        ):
             seen.add(key)
             found.append(candidate)
     return found
@@ -66,28 +75,96 @@ def artwork_candidates(cache: Path, appid: int, source="hero"):
     return candidates
 
 
-def find_library_artwork(appid: int, source="hero"):
+def _active_account_id(root: Path):
+    """Steam's most recent login uses the low 32 bits as its userdata ID."""
+    try:
+        content = (root / "config/loginusers.vdf").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    for match in re.finditer(r'"(\d{16,20})"\s*\{([^{}]*)\}', content):
+        if re.search(r'"MostRecent"\s*"1"', match.group(2), re.IGNORECASE):
+            return str(int(match.group(1)) & 0xFFFFFFFF)
+    return None
+
+
+def _grid_directories(root: Path):
+    userdata = root / "userdata"
+    active_id = _active_account_id(root)
+    if active_id:
+        active = userdata / active_id / "config/grid"
+        # Never show another account's artwork merely because the active
+        # account has not customized this game yet.
+        return [active] if active.is_dir() else []
+    try:
+        accounts = sorted(
+            (path for path in userdata.iterdir() if path.is_dir() and path.name.isdigit()),
+            key=lambda path: path.stat().st_mtime_ns,
+            reverse=True,
+        )
+    except OSError:
+        return []
+    # Without loginusers.vdf, use only the most recently touched account.
+    # Searching every account could apply somebody else's grid override.
+    for account in accounts:
+        grid = account / "config/grid"
+        if grid.is_dir():
+            return [grid]
+    return []
+
+
+def _valid_image(path: Path):
+    try:
+        return path.is_file() and 0 < path.stat().st_size <= MAX_BYTES
+    except OSError:
+        return False
+
+
+def _custom_artwork(root: Path, appid: int, source: str):
+    filename = f"{appid & 0xFFFFFFFF}{CUSTOM_GRID_SUFFIXES[source]}"
+    for grid in _grid_directories(root):
+        for extension in IMAGE_EXTENSIONS:
+            candidate = grid / f"{filename}.{extension}"
+            if _valid_image(candidate):
+                return candidate
+    return None
+
+
+def _find_artwork_details(appid: int, source="hero"):
     try:
         appid = int(appid)
     except (TypeError, ValueError):
-        return None
+        return None, source, False
     if appid <= 0:
-        return None
+        return None, source, False
     source = source if source in ARTWORK_SOURCES else "hero"
-    for root in steam_roots():
+    roots = steam_roots()
+    for root in roots:
+        custom = _custom_artwork(root, appid, source)
+        if custom is not None:
+            return custom, source, True
+    for root in roots:
         for candidate in artwork_candidates(root / "appcache/librarycache", appid, source):
-            try:
-                size = candidate.stat().st_size
-                if candidate.is_file() and 0 < size <= MAX_BYTES:
-                    return candidate
-            except OSError:
-                continue
-    return None
+            if _valid_image(candidate):
+                return candidate, source, False
+    # Non-Steam shortcuts may have only a custom capsule or header. Prefer
+    # another available local image over showing no Artwork at all.
+    for fallback in ("hero", "header", "capsule"):
+        if fallback == source:
+            continue
+        for root in roots:
+            custom = _custom_artwork(root, appid, fallback)
+            if custom is not None:
+                return custom, fallback, True
+    return None, source, False
+
+
+def find_library_artwork(appid: int, source="hero"):
+    return _find_artwork_details(appid, source)[0]
 
 
 def get_library_artwork(appid: int, source="hero"):
     source = source if source in ARTWORK_SOURCES else "hero"
-    path = find_library_artwork(appid, source)
+    path, actual_source, custom = _find_artwork_details(appid, source)
     if path is None:
         return {
             "found": False,
@@ -114,8 +191,11 @@ def get_library_artwork(appid: int, source="hero"):
     return {
         "found": True,
         "appid": int(appid),
-        "source": source,
-        "source_label": ARTWORK_SOURCES[source]["label"],
+        "source": actual_source,
+        "source_label": (
+            f"Custom {ARTWORK_SOURCES[actual_source]['label']}"
+            if custom else ARTWORK_SOURCES[actual_source]["label"]
+        ),
         "mime": mime,
         "filename": path.name,
         "fingerprint": fingerprint,

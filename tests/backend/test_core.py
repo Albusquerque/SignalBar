@@ -511,6 +511,65 @@ class PersistenceTests(unittest.TestCase):
                 payload = get_library_artwork(42, "header")
                 self.assertEqual(payload["source_label"], "Library Header")
 
+    def test_custom_grid_artwork_overrides_official_cache_for_active_account(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "Steam"
+            cache = root / "appcache/librarycache/42"
+            cache.mkdir(parents=True)
+            (cache / "library_hero.jpg").write_bytes(b"official")
+            active_grid = root / "userdata/1234/config/grid"
+            active_grid.mkdir(parents=True)
+            (active_grid / "42_hero.png").write_bytes(b"custom")
+            other_grid = root / "userdata/5678/config/grid"
+            other_grid.mkdir(parents=True)
+            (other_grid / "42_hero.png").write_bytes(b"other account")
+            config = root / "config"
+            config.mkdir()
+            (config / "loginusers.vdf").write_text(
+                '"users"\n{\n'
+                '"76561197960266962"\n{\n"MostRecent" "1"\n}\n'
+                '"76561197960271406"\n{\n"MostRecent" "0"\n}\n}\n'
+            )
+            with patch.dict("os.environ", {"SIGNALBAR_STEAM_ROOT": str(root)}):
+                payload = get_library_artwork(42, "hero")
+                self.assertEqual(payload["filename"], "42_hero.png")
+                self.assertEqual(payload["source_label"], "Custom Library Hero")
+                self.assertIn("Y3VzdG9t", payload["data_uri"])
+                (active_grid / "42_hero.png").unlink()
+                self.assertEqual(find_library_artwork(42, "hero"), cache / "library_hero.jpg")
+
+    def test_non_steam_shortcut_uses_custom_grid_and_falls_back_to_available_role(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "Steam"
+            grid = root / "userdata/1234/config/grid"
+            grid.mkdir(parents=True)
+            appid = 0xF1234567
+            (grid / f"{appid}_hero.png").write_bytes(b"hero")
+            (grid / f"{appid}.png").write_bytes(b"header")
+            (grid / f"{appid}p.png").write_bytes(b"capsule")
+            with patch.dict("os.environ", {"SIGNALBAR_STEAM_ROOT": str(root)}):
+                self.assertEqual(get_library_artwork(appid, "hero")["filename"], f"{appid}_hero.png")
+                self.assertEqual(get_library_artwork(appid, "header")["filename"], f"{appid}.png")
+                self.assertEqual(get_library_artwork(appid, "capsule")["filename"], f"{appid}p.png")
+                (grid / f"{appid}_hero.png").unlink()
+                payload = get_library_artwork(appid, "hero")
+                self.assertEqual(payload["source"], "header")
+                self.assertEqual(payload["source_label"], "Custom Library Header")
+
+    def test_active_account_does_not_fall_back_to_another_accounts_grid(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "Steam"
+            other_grid = root / "userdata/5678/config/grid"
+            other_grid.mkdir(parents=True)
+            (other_grid / "42_hero.png").write_bytes(b"other account")
+            config = root / "config"
+            config.mkdir()
+            (config / "loginusers.vdf").write_text(
+                '"users"\n{\n"76561197960266962"\n{\n"MostRecent" "1"\n}\n}\n'
+            )
+            with patch.dict("os.environ", {"SIGNALBAR_STEAM_ROOT": str(root)}):
+                self.assertFalse(get_library_artwork(42, "hero")["found"])
+
     def test_hardware_reverse_maps_logical_left_to_physical_right(self):
         with tempfile.TemporaryDirectory() as directory:
             paths = []
