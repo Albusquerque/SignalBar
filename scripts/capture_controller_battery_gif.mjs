@@ -1,4 +1,4 @@
-/** Capture the controller-battery concept's real DOM for the README GIF. */
+/** Capture the controller motion mockup's machine and logical LED preview. */
 import { chromium } from "playwright";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs/promises";
@@ -6,26 +6,37 @@ import os from "node:os";
 import path from "node:path";
 
 const root = path.resolve(import.meta.dirname, "..");
-const source = await fs.readFile(path.join(root, "assets/controller-battery-demo.html"), "utf8");
+const source = await fs.readFile(path.join(root, "assets/controller-motion-demo.html"), "utf8");
 const output = path.join(root, "assets/readme-gifs/controller-battery.gif");
 const scratch = await fs.mkdtemp(path.join(os.tmpdir(), "signalbar-controller-gif-"));
 const browser = await chromium.launch({ headless: true });
 const interval = 125;
 
 try {
-  const page = await browser.newPage({ viewport: { width: 1024, height: 730 }, deviceScaleFactor: 1 });
-  await page.setContent('<!doctype html><html><body style="margin:0"><iframe sandbox="allow-scripts" style="display:block;border:0;width:100%;height:710px"></iframe></body></html>');
+  const page = await browser.newPage({ viewport: { width: 1024, height: 740 }, deviceScaleFactor: 1 });
+  await page.setContent('<!doctype html><html><body style="margin:0"><iframe sandbox="allow-scripts" style="display:block;border:0;width:100%;height:720px"></iframe></body></html>');
   await page.locator("iframe").evaluate((iframe, html) => {
-    iframe.srcdoc = `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'"><style>html,body{margin:0}#sb-battery-v2 .variant-area{display:none}#sb-battery-v2 .visual{align-self:start}</style></head><body>${html}</body></html>`;
+    const csp = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'";
+    iframe.srcdoc = `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${csp}"><style>html,body{margin:0}#sb-motion-lab .sb-picks,#sb-motion-lab .sb-caption{display:none}#sb-motion-lab .sb-visual{align-self:start}</style></head><body>${html}</body></html>`;
   }, source);
   const frame = page.frameLocator("iframe");
-  const crop = frame.locator(".visual");
+  const crop = frame.locator(".sb-visual");
   await crop.waitFor();
   let count = 0;
-  for (const [scene, variant, duration] of [["connect", 0, 3000], ["low", 1, 3000], ["duo", 0, 3000]]) {
+  const scenes = [
+    { scene: "connect", variant: 0, battery: 74, duration: 2400 },
+    { scene: "duo", variant: 2, battery: 41, duration: 3800 },
+    { scene: "low", variant: 0, battery: 14, duration: 2500 },
+    { scene: "charging", variant: 1, battery: 41, duration: 3300 },
+    { scene: "gauge", variant: 1, battery: 74, duration: 1300 },
+  ];
+  for (const { scene, variant, battery, duration } of scenes) {
+    await frame.locator("#sb-motion-battery").evaluate((slider, value) => {
+      slider.value = String(value);
+      slider.dispatchEvent(new Event("input", { bubbles: true }));
+    }, battery);
     await frame.locator(`[data-scene="${scene}"]`).click();
-    // Variant buttons remain selectable even though only the visual is captured.
-    await frame.locator(".variant").nth(variant).evaluate((button) => button.click());
+    await frame.locator(".sb-choice").nth(variant).evaluate((button) => button.click());
     const started = Date.now();
     for (let elapsed = 0; elapsed < duration; elapsed += interval) {
       const wait = started + elapsed - Date.now();

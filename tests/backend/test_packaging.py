@@ -8,6 +8,10 @@ class PackagingTests(unittest.TestCase):
         for relative in ("main.py", "plugin.json", "package.json", "LICENSE", "scripts/package_plugin.py"):
             self.assertTrue((root / relative).is_file(), relative)
         self.assertTrue((root / "py_modules/signalbar/backend/engine.py").is_file())
+        self.assertTrue((root / "assets/readme-gifs/controller-battery.gif").is_file())
+        from scripts.package_plugin import iter_files
+        packaged = {str(path.relative_to(root)) for path in iter_files()}
+        self.assertIn("assets/readme-gifs/controller-battery.gif", packaged)
 
     def test_panel_order_and_lifecycle_guards(self):
         root = Path(__file__).resolve().parents[2]
@@ -73,6 +77,9 @@ class PackagingTests(unittest.TestCase):
         self.assertIn("icon: <TbCubeSpark />", panel)
         self.assertIn('<PanelSection title="Active countdown">', panel)
         self.assertIn('label="Isolate recording marker"', panel)
+        events_panel = panel[panel.index("function EventsPanel"):panel.index("function ControllersPanel")]
+        self.assertNotIn("<PalettePreview", events_panel)
+        self.assertIn('<EventPreviewStrip status={status} kinds={[kind]} />', events_panel)
         self.assertIn('setSetting("recording_marker_isolation", value)', panel)
         self.assertIn('<EventPreviewStrip status={status}', panel)
 

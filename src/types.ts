@@ -17,6 +17,8 @@ export interface Status {
   suspension_reason: string;
   error: string;
   mode: Mode;
+  default_mode: Mode;
+  display_override: "inherit" | "artwork" | "performance";
   performance_metric: PerformanceMetric;
   performance_smoothing: PerformanceSmoothing;
   performance_always: boolean;
@@ -29,6 +31,9 @@ export interface Status {
   artwork_manual_y: number;
   artwork_source: ArtworkSource;
   artwork_custom: boolean;
+  artwork_default_mode: ArtworkMode;
+  artwork_default_manual_y: number;
+  artwork_default_source: ArtworkSource;
   cool_temp_c: number;
   hot_temp_c: number;
   reverse_led_order: boolean;
@@ -47,6 +52,8 @@ export interface Status {
   event_achievement_variant: string;
   event_screenshot_variant: string;
   controller_battery_display: "off" | "home" | "everywhere";
+  controller_charging_mode: "off" | "brief" | "continuous-home" | "continuous-everywhere";
+  controller_charging_display: "off" | "home" | "everywhere";
   controller_alert_context: "off" | "home" | "game" | "both";
   controller_alerts_enabled: boolean;
   controller_connect_enabled: boolean;
@@ -58,6 +65,11 @@ export interface Status {
   controller_low_variant: string;
   controller_charging_variant: string;
   controller_duo_variant: string;
+  controller_colour_normal: RGB;
+  controller_colour_medium: RGB;
+  controller_colour_low: RGB;
+  controller_colour_charging: RGB;
+  controller_gauge_brightness: number;
   controllers: {
     controllers: { id: string; name: string; percent: number | null; level: number | null; charging: boolean | null }[];
     active: boolean;
@@ -65,6 +77,7 @@ export interface Status {
     variant: string;
     colors: RGB[];
     persistent_available: boolean;
+    charging_active: boolean;
   };
   events: {
     active: boolean;
@@ -76,6 +89,8 @@ export interface Status {
   };
   game: { appid: number; title: string };
   performance: {
+    sample_age_s: number | null;
+    error: string;
     gpu_load: number | null;
     gpu_temperature: number | null;
     cpu_load: number | null;
@@ -116,6 +131,7 @@ export interface Status {
     parental_wait_s: number | null;
     controller_callback_source: string;
     controller_last_update_age_s: number | null;
+    controller_telemetry: import("./controller_monitor").ControllerTelemetry;
   };
 }
 

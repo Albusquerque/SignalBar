@@ -12,6 +12,7 @@ OUTPUT = ROOT / "out" / f"SignalBar-v{PACKAGE['version']}.zip"
 FILES = [
     "main.py", "plugin.json", "package.json", "LICENSE", "README.md",
     "ARCHITECTURE.md", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md", "dist/index.js",
+    "docs/CONTROLLERS_RESEARCH.md",
     "assets/signalbar-product-hero-v4.png",
     "assets/signalbar-artwork-mode-v1.png",
     "assets/signalbar-performance-mode-v1.png",
@@ -24,6 +25,9 @@ def iter_files():
         if not path.is_file():
             raise SystemExit(f"required release file is missing: {relative}")
         yield path
+    # The bundled README refers to these animations. Keep the installable ZIP
+    # self-contained rather than leaving broken relative image links.
+    yield from sorted((ROOT / "assets" / "readme-gifs").glob("*.gif"))
     for path in sorted((ROOT / "py_modules" / "signalbar").rglob("*.py")):
         yield path
 

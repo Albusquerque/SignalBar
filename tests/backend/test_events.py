@@ -95,7 +95,7 @@ class EventTests(unittest.TestCase):
             settings = SettingsStore(str(Path(temp) / "settings.json"))
             result = settings.update({"event_notification_variant": ["bad"],
                                       "event_achievement_variant": "achievement-supernova"})
-            self.assertEqual(result["event_notification_variant"], "notification-original")
+            self.assertEqual(result["event_notification_variant"], "notification-beacon")
             self.assertEqual(result["event_achievement_variant"], "achievement-supernova")
 
     def test_queued_event_keeps_variant_selected_at_trigger_time(self):
@@ -228,6 +228,7 @@ class EventTests(unittest.TestCase):
             settings = SettingsStore(str(Path(folder) / "settings.json"))
             engine = Engine(settings, str(Path(folder) / "artwork.json"))
             engine.set_game(42, "Test")
+            engine.update_settings({"events_enabled": False})
             self.assertFalse(engine.trigger_event("achievement"))
             engine.update_settings({"events_enabled": True})
             self.assertTrue(engine.trigger_event("achievement"))
@@ -259,7 +260,9 @@ class EventTests(unittest.TestCase):
             settings = SettingsStore(str(Path(folder) / "settings.json"))
             engine = Engine(settings, str(Path(folder) / "artwork.json"),
                             hardware_factory=lambda: hardware)
-            engine.update_settings({"events_enabled": True})
+            engine.update_settings({"mode": "artwork", "events_enabled": True,
+                                    "event_notification_variant": "notification-original", "performance_always": False,
+                                    "controller_battery_display": "off"})
             engine.start()
             try:
                 self.assertTrue(engine.trigger_event("notification"))
@@ -297,11 +300,11 @@ class EventTests(unittest.TestCase):
             time.sleep(.01)
         return False
 
-    def test_event_opt_in_and_category_choices_persist(self):
+    def test_event_defaults_and_category_choices_persist(self):
         with tempfile.TemporaryDirectory() as folder:
             path = str(Path(folder) / "settings.json")
             settings = SettingsStore(path)
-            self.assertFalse(settings.all()["events_enabled"])
+            self.assertTrue(settings.all()["events_enabled"])
             settings.update({"events_enabled": True, "event_screenshots_enabled": False})
             restored = SettingsStore(path)
             self.assertTrue(restored.all()["events_enabled"])

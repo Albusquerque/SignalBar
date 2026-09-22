@@ -1,8 +1,204 @@
 # Changelog
 
-## 0.5.0-beta.2 - 2026-09-22
+## 0.5.0 - 2026-09-23
 
-- Fix live controller telemetry on SteamOS. Steam sends controller battery
+Official release. Changes since 0.4.0:
+
+### Controller battery signals
+
+- Detect already-connected controllers from SteamUI's SteamInputManager service,
+  listen for live connection and battery notifications, and recover with a
+  background two-second poll. Disconnects clear stale device state.
+- Keep live battery updates ahead of older controller-list snapshots, including
+  after a list reorder or a late query. Unknown readings are not shown as zero
+  or an invented exact percentage.
+- Add an optional persistent battery gauge: Off, On Home, or Everywhere. Two
+  controllers use mirrored eight-LED gauges, an unlit centre LED, and fixed
+  white endpoints once the introductory animation has finished.
+- Add brief connection and low-battery alerts, with independent Home/in-game
+  visibility and a configurable low-battery threshold. Alerts are event-driven,
+  not replayed on every poll; a controller present at startup does not create
+  a false connection animation.
+- Add one exclusive charging choice: Off, Brief, Continuous on Home, or
+  Continuous everywhere. Continuous movement stops when charging stops or
+  reaches 100%, with a short completion cue at full charge. Charging requires
+  Steam to report both a usable battery level and a charging state.
+- Offer three visual variants for connection, a single gauge, low battery,
+  charging, and the two-controller introduction. Keep the charging half blue
+  and its moving/endpoint highlights white in the two-controller display.
+- Add four controller colour pickers and controller-only brightness. Previews
+  show sample data and do not claim that a physical controller was detected.
+
+### Display, sensors and interface
+
+- Add a per-game Artwork or Performance display choice with Use default to
+  remove the override. The global Disabled setting still overrides profiles.
+- Collect CPU/GPU data independently of the active display, so Performance
+  settings show fresh data without first switching to Performance. Clear
+  failed or expired readings instead of leaving misleading stale values.
+- Add a compact configuration snapshot in Advanced / debug for photographing
+  saved choices across every tab, including global versus per-game Artwork.
+  Keep device paths and controller identifiers out of this snapshot.
+- Remove the duplicate live LED preview at the top of Light events; the
+  previews beside individual animation controls remain.
+
+### New-install defaults and documentation
+
+- Set fresh installations to the approved configuration: Performance with
+  mirrored CPU + GPU, Balanced response and Home display; classic temperature
+  colours with 45°C/78°C thresholds; Library Hero/Auto Artwork; a white
+  Steam Families countdown and 60-minute personal timer.
+- Enable Light events with Return beacon notifications, Chromatic rebound
+  achievements, Expanding echoes screenshots, and an isolated recording LED.
+- Set the controller gauge and continuous charging to Home, brief alerts to
+  Home + in game, Bright tip for a single gauge, Tidal fill for charging,
+  Mirror greeting for two controllers, and 65% controller brightness.
+- Existing stored preferences remain intact on upgrade. Refresh the README
+  and capture a new controller GIF from the visual mockup.
+
+Known limit: controller reporting uses private Steam interfaces and depends on
+the controller and connection type; a full hardware compatibility list is not
+yet available. Automated tests cover the integration paths, but cannot prove
+every Steam Machine/controller combination.
+
+## 0.5.0-beta.10 - LOCAL ONLY - 2026-09-23
+
+Not published. Remove the duplicate live LED preview at the top of Light
+events. Category-specific previews remain beside their animation controls.
+
+## 0.5.0-beta.9 - LOCAL ONLY - 2026-09-23
+
+Not published. Adds a photo-friendly configuration snapshot to Advanced / debug.
+
+- Show the saved choices from Display, Artwork, Performance, Playtime, Light
+  events, Controllers, and Advanced in one grouped, read-only summary.
+- Distinguish global Artwork defaults from the current game's saved profile.
+  Include inactive options so the summary can help choose future defaults.
+- Keep device paths and controller identifiers out of this new summary; technical
+  telemetry remains below it in the existing debug details.
+- Add frontend coverage for the summary and backend coverage for the exposed
+  global Artwork defaults.
+
+## 0.5.0-beta.8 - LOCAL ONLY - 2026-09-23
+
+Not published. Clarifies and separates controller charging behavior.
+
+- Replace the overlapping charging switches with one exclusive choice: Off,
+  Brief (about 3 seconds), Continuous on Home, or Continuous everywhere.
+- Brief charging follows the brief-alert master switch and location. Continuous
+  charging remains independent and stops if Steam stops reporting charge or
+  reports 100%, when its short completion cue plays.
+- Migrate previous beta settings to the closest new choice. Keep the legacy
+  fields derived for compatibility with older local builds.
+- Require a usable battery level before starting a brief charging cue.
+- Audit the Controllers copy to distinguish measured battery data from sample
+  previews, explain priority and startup limits, and show charging in the quick
+  panel with its actual colours.
+- Add tests for migration, exclusive behavior, duration and return to the base
+  display. No GitHub push or release.
+
+## 0.5.0-beta.7 - LOCAL ONLY - 2026-09-23
+
+Not published. Fixes two-controller charging colours.
+
+- Tint the charging controller's half of the mirrored gauge with the selected
+  charging blue, while preserving white motion and endpoint cues. The other
+  controller keeps its normal battery colour, and the centre LED stays off.
+- Apply the same rule during the second-controller connection introduction, not
+  just the continuous charging display. If both controllers charge, both halves
+  use their own blue-and-white motion.
+- Add regression tests for left, right, both, and all three charging styles.
+
+## 0.5.0-beta.6 - LOCAL ONLY - 2026-09-23
+
+Not published. Fixes the two-controller preview feedback from beta.5.
+
+- Use white moving points, rather than blue and yellow, in Two signatures and
+  Mirror greeting. Keep the fixed white battery endpoints for the completed
+  introduction, with the centre LED off throughout.
+- Extend the two-controller preview to six seconds so the settled white tips
+  remain visible long enough to inspect. The persistent two-controller gauge
+  keeps them visible after the preview when enabled.
+- Add a regression test for left and right white motion, endpoint timing and
+  the final hold.
+
+## 0.5.0-beta.5 - LOCAL ONLY - 2026-09-23
+
+Not published. Controller motion update based on the latest visual prototype.
+
+- Add independent Off / On Home / Everywhere choices for a continuous charging
+  animation. It stops at 100%, plays a brief completion cue, then restores the
+  prior display. Charging can work without enabling the permanent gauge.
+- Rework the three connection, low-battery, charging and two-controller visual
+  styles to follow the motion prototype. Existing saved style IDs are retained.
+- Make the two-controller gauge consistently mirrored. Keep the centre LED off;
+  add white tips at the actual battery endpoints only after the intro finishes.
+- Show charging movement on its own half when two controllers are connected.
+- Add regression tests for intro timing, 96%/41% mirrored levels, continuous
+  charging, 100% completion, and Home versus in-game visibility.
+- No GitHub push or release for this local beta.
+
+## 0.5.0-beta.4 - LOCAL ONLY - 2026-09-22
+
+Not published. Includes fixes for the user's beta.3 hardware feedback.
+
+- Fix a live controller battery reading being replaced one or two seconds later
+  by an older controller-list snapshot. Live battery events are retained for
+  the device connection, across polling and list order/index changes. Disconnect
+  clears them, so a replacement controller does not inherit another's battery.
+- Seed already-connected controllers from SteamUI's read-only controller state,
+  matching by device identity. Once a live battery event arrives, it takes
+  precedence over both list and UI snapshots.
+- Add per-device diagnostics: list percentage, SteamUI percentage, latest battery
+  event, chosen percentage, source and event age. No raw device serial is shown.
+- Add colour pickers for healthy, medium, low and charging/connection colours.
+  Add 10–100% controller-only brightness, default 65%, with saturated defaults
+  to reduce the diffuser's pale white-green glow. Single/two-player gauges,
+  controller animations and their previews share these settings.
+- Collect CPU/GPU metrics every 0.5 seconds independently of Display and LED
+  hardware availability. Artwork and Disabled no longer freeze sensor readings.
+  Sensor failures clear old values; expired readings are not presented as live.
+- Add per-game Display profiles: Use default, Artwork or Performance. Launching
+  another game or returning Home resolves its own choice; global Disabled still
+  overrides everything. Existing per-game artwork sampling is unchanged.
+- Extend regression tests for the exact 96%/41% versus 96%/100% case, SteamUI
+  startup readings, profile persistence/arbitration, colours and sensor lifecycle.
+
+## 0.5.0-beta.3 - LOCAL ONLY - 2026-09-22
+
+Not published. Real Steam Machine / Steam Controller validation is still required.
+
+- Replace the obsolete SteamClient.Input controller-list/battery listeners with
+  SteamUI's current SteamInputManager service. Discover it by its named service
+  descriptor, not a hard-coded webpack module number.
+- Query already-connected controllers at plugin startup, listen for roster,
+  battery and disconnection notifications, and read the list every two seconds
+  as a recovery mechanism. Resume requests a fresh reading.
+- Read the actual controller_index, battery_level, is_charging and charging
+  fields. Battery values 0 to 100 are percentages; missing/sentinel data stays
+  unknown. No input/calibration feed or direct HID access is used.
+- Preserve device identity when the index changes; do not carry battery values
+  to another controller that reuses an index. Reject obsolete in-flight roster
+  responses and retain newer battery events.
+- Expose service connection state, hook count, query/event counters, response
+  latency and error details. Distinguish an empty response from a failed read.
+- Expire stale live data after ten seconds. Retry service discovery, missing
+  hooks and backend delivery without opening the settings panel.
+- Warn once if the initial reading is already low, and do not consume warnings
+  while disabled, in the wrong context or blocked by a critical countdown.
+- Fix the Tip gauge crash at zero/unknown charge. Update active animations from
+  the latest reading and recognise unknown-to-charging transitions.
+- Add lifecycle/race tests and an optional contract test loading the installed
+  Steam generated service wrapper with a simulated transport. This validates
+  the interface, not physical hardware compatibility.
+
+## 0.5.0-beta.2 - withdrawn, unsuccessful - 2026-09-22
+
+The attempted fix below did not restore detection on the user's Steam Machine.
+Its release and remote tag were removed. These notes describe the attempt, not
+a verified fix; beta.3 replaces this outdated callback path.
+
+- Attempt to fix live controller telemetry on older SteamUI. Its battery callback sends
   levels as an ordered array matching the latest controller-list callback;
   beta.1 incorrectly expected an index/value pair and discarded the update.
 - Read SteamUI's `ucBatteryLevel` percentage field when it is already present

@@ -1,0 +1,214 @@
+<div id="sb-motion-lab">
+  <style>
+    #sb-motion-lab{--sb-bg:#0d141d;--sb-panel:#17232e;--sb-panel-2:#1d2c38;--sb-line:#364b59;--sb-text:#edf5f6;--sb-muted:#aec3cb;--sb-cyan:#57d9e9;--sb-mint:#78dabb;--sb-amber:#ffd17b;--sb-red:#fb6971;--sb-white:#f6f5ef;--sb-off:#080c10;color:var(--sb-text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:1024px;margin:auto}
+    #sb-motion-lab *,#sb-motion-lab *::before,#sb-motion-lab *::after{box-sizing:border-box}
+    #sb-motion-lab .sb-shell{overflow:hidden;border:1px solid #40515d;border-radius:17px;background:var(--sb-bg);box-shadow:0 20px 66px #0007}
+    #sb-motion-lab .sb-top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:14px 18px;border-bottom:1px solid var(--sb-line);background:#17232e}
+    #sb-motion-lab .sb-brand{font-size:18px;font-weight:500;letter-spacing:.01em}
+    #sb-motion-lab .sb-kicker{font-size:12px;color:var(--sb-muted)}
+    #sb-motion-lab .sb-scenes{display:flex;gap:6px;flex-wrap:wrap;padding:10px 15px;background:#111b25;border-bottom:1px solid var(--sb-line)}
+    #sb-motion-lab button,#sb-motion-lab select,#sb-motion-lab input{font:inherit}
+    #sb-motion-lab .sb-tab,#sb-motion-lab .sb-choice,#sb-motion-lab .sb-action{min-height:40px;padding:7px 11px;border-radius:7px;border:1px solid #4a5f6e;background:#223342;color:#e0ecf0;font-size:13px;line-height:1.2}
+    #sb-motion-lab .sb-tab[aria-pressed="true"],#sb-motion-lab .sb-choice[aria-pressed="true"]{background:#abe6e6;color:#09222a;border-color:#abe6e6;font-weight:500}
+    #sb-motion-lab .sb-action{background:#2a4350;border-color:#6e8992}
+    #sb-motion-lab .sb-layout{display:grid;grid-template-columns:minmax(0,1.34fr) minmax(280px,.82fr)}
+    #sb-motion-lab .sb-visual{min-width:0;border-right:1px solid var(--sb-line)}
+    #sb-motion-lab .sb-stage{position:relative;display:flex;align-items:flex-end;justify-content:center;overflow:hidden;height:405px;background:radial-gradient(circle at 50% 27%,#b7aaa0,#938782 68%,#776d68)}
+    #sb-motion-lab .sb-stage::before{content:"";position:absolute;top:58%;left:0;right:0;height:7px;background:#805e4d;opacity:.74}
+    #sb-motion-lab .sb-stage::after{content:"";position:absolute;bottom:0;left:0;right:0;height:82px;background:linear-gradient(175deg,#bb946d,#e1c19a 34%,#b38c62);box-shadow:inset 0 6px 7px #ffe5c488}
+    #sb-motion-lab .sb-stage-head{position:absolute;z-index:5;left:14px;right:14px;top:13px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:12px}
+    #sb-motion-lab .sb-stage-head span{padding:6px 9px;border-radius:5px;background:#111c24de;box-shadow:0 4px 12px #0003}
+    #sb-motion-lab .sb-machine{position:relative;z-index:3;width:min(74%,330px);margin-bottom:59px;filter:drop-shadow(13px 17px 12px #251f1ab9)}
+    #sb-motion-lab .sb-cube{height:242px;border-radius:3px 4px 0 0;background:linear-gradient(104deg,#2b2e30,#1b1e20 42%,#25292b 80%,#1c1f21);box-shadow:inset 1px 0 1px #b7bdb849,inset -2px 0 3px #07090a,inset 0 1px 1px #aaa9a64f}
+    #sb-motion-lab .sb-seam{position:relative;isolation:isolate;height:12px;margin:0 5px;background:#080c0d}
+    #sb-motion-lab .sb-light,#sb-motion-lab .sb-bloom,#sb-motion-lab .sb-reflection{position:absolute;left:1%;right:1%;pointer-events:none;background:#080c0d}
+    #sb-motion-lab .sb-light{z-index:2;top:2px;height:7px;filter:blur(1.9px)}
+    #sb-motion-lab .sb-bloom{z-index:1;top:-14px;height:39px;filter:blur(13px);opacity:.9}
+    #sb-motion-lab .sb-reflection{z-index:1;top:12px;height:12px;filter:blur(9px);opacity:.34}
+    #sb-motion-lab .sb-fascia{height:54px;padding:0 6%;display:flex;align-items:center;gap:10%;background:linear-gradient(112deg,#24292b,#1a1d20 67%,#292d2e);box-shadow:inset 0 2px 3px #7173703a}
+    #sb-motion-lab .sb-usb{width:15%;height:12px;background:#050708;box-shadow:inset 0 2px 2px #000,0 1px 1px #b9b9b333}
+    #sb-motion-lab .sb-usb::after{content:"";display:block;width:70%;height:3px;margin:5px auto 0;background:#555b59}
+    #sb-motion-lab .sb-slot{width:11%;height:3px;background:#080a0b}
+    #sb-motion-lab .sb-dot{width:5px;height:5px;margin-left:auto;border-radius:50%;background:#f2f3fb;box-shadow:0 0 6px #dae3ff;flex:none}
+    #sb-motion-lab .sb-power{width:27px;height:27px;border-radius:50%;background:#282c2c;box-shadow:0 0 0 1px #080a0b,inset 1px 1px 2px #a4acaa45;flex:none}
+    #sb-motion-lab .sb-preview{padding:15px 17px 17px;background:#16222c}
+    #sb-motion-lab .sb-readout{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:11px;font-size:14px}
+    #sb-motion-lab .sb-readout strong{font-weight:500}
+    #sb-motion-lab .sb-readout span{color:var(--sb-muted);font-size:12px}
+    #sb-motion-lab .sb-logic{display:grid;grid-template-columns:repeat(17,minmax(0,1fr));gap:3px}
+    #sb-motion-lab .sb-logic i{height:20px;border-radius:2px;background:#303e48}
+    #sb-motion-lab .sb-ruler{display:flex;justify-content:space-between;margin-top:7px;color:var(--sb-muted);font-size:11px}
+    #sb-motion-lab .sb-caption{min-height:31px;margin:10px 0 0;color:var(--sb-muted);font-size:12px;line-height:1.35}
+    #sb-motion-lab .sb-picks{padding:14px 17px 17px;background:#11202b;border-top:1px solid var(--sb-line)}
+    #sb-motion-lab .sb-label{margin-bottom:8px;color:#c2d5dc;font-size:11px;text-transform:uppercase;letter-spacing:.09em}
+    #sb-motion-lab .sb-choices{display:flex;flex-wrap:wrap;gap:6px}
+    #sb-motion-lab .sb-detail{min-height:34px;margin:10px 0 0;color:var(--sb-muted);font-size:12px;line-height:1.4}
+    #sb-motion-lab .sb-aside{padding:16px 18px;background:#1b2a36}
+    #sb-motion-lab .sb-aside-head{display:flex;justify-content:space-between;align-items:center;gap:8px;padding-bottom:12px;border-bottom:1px solid #405463}
+    #sb-motion-lab .sb-aside-head strong{font-size:16px;font-weight:500}
+    #sb-motion-lab .sb-concept{font-size:11px;color:#b6eada;background:#245246;border-radius:4px;padding:4px 6px}
+    #sb-motion-lab .sb-group{margin:16px 0 8px;color:#c1d5dc;font-size:11px;text-transform:uppercase;letter-spacing:.09em}
+    #sb-motion-lab .sb-setting{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:49px;padding:9px 0;border-top:1px solid #3a4c59;color:#e7eff2;font-size:13px}
+    #sb-motion-lab .sb-setting label{max-width:65%}
+    #sb-motion-lab .sb-setting select{max-width:145px;padding:6px;border:1px solid #526b77;border-radius:5px;background:#2b3e4b;color:#f4f8f9;font-size:12px}
+    #sb-motion-lab .sb-value{font-variant-numeric:tabular-nums;color:#edfaf8}
+    #sb-motion-lab .sb-range{width:100%;accent-color:#8fe8dc;margin:8px 0}
+    #sb-motion-lab .sb-actions{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}
+    #sb-motion-lab .sb-hint{color:var(--sb-muted);font-size:12px;line-height:1.45;margin:8px 0 0}
+    #sb-motion-lab .sb-micro{margin-top:14px;padding-top:12px;border-top:1px solid #405463;color:#aec2c9;font-size:11px;line-height:1.45}
+    @media(max-width:760px){#sb-motion-lab .sb-layout{grid-template-columns:1fr}#sb-motion-lab .sb-visual{border-right:0;border-bottom:1px solid var(--sb-line)}#sb-motion-lab .sb-stage{height:340px}}
+    @media(max-width:390px){#sb-motion-lab .sb-stage{height:315px}#sb-motion-lab .sb-machine{width:min(78%,280px);margin-bottom:54px}#sb-motion-lab .sb-cube{height:206px}#sb-motion-lab .sb-fascia{height:48px}#sb-motion-lab .sb-logic{gap:2px}#sb-motion-lab .sb-stage-head{left:8px;right:8px;top:8px}}
+    @media(prefers-reduced-motion:reduce){#sb-motion-lab .sb-light,#sb-motion-lab .sb-bloom,#sb-motion-lab .sb-reflection{transition:none}}
+  </style>
+  <section class="sb-shell" aria-label="SignalBar controller signal concepts">
+    <header class="sb-top"><strong class="sb-brand">SignalBar</strong><span class="sb-kicker">Controller motion lab · 17 LEDs · concept</span></header>
+    <nav class="sb-scenes" aria-label="Controller situations">
+      <button type="button" class="sb-tab cursor-interaction" data-scene="connect" aria-pressed="false">Connect</button>
+      <button type="button" class="sb-tab cursor-interaction" data-scene="gauge" aria-pressed="false">Battery gauge</button>
+      <button type="button" class="sb-tab cursor-interaction" data-scene="low" aria-pressed="false">Low battery</button>
+      <button type="button" class="sb-tab cursor-interaction" data-scene="charging" aria-pressed="true">Charging</button>
+      <button type="button" class="sb-tab cursor-interaction" data-scene="duo" aria-pressed="false">Two controllers</button>
+    </nav>
+    <div class="sb-layout">
+      <div class="sb-visual">
+        <div class="sb-stage">
+          <div class="sb-stage-head"><span class="sb-hud-left">Controller 2</span><span class="sb-hud-right">41% · charging</span></div>
+          <div class="sb-machine" aria-hidden="true"><div class="sb-cube"></div><div class="sb-seam"><div class="sb-bloom"></div><div class="sb-reflection"></div><div class="sb-light"></div></div><div class="sb-fascia"><i class="sb-usb"></i><i class="sb-usb"></i><i class="sb-slot"></i><i class="sb-dot"></i><i class="sb-power"></i></div></div>
+        </div>
+        <div class="sb-preview"><div class="sb-readout"><strong class="sb-main">Controller 2 · 41%</strong><span class="sb-status">Charging · continuous</span></div><div class="sb-logic" role="img" aria-label="Logical preview of the 17 LEDs"></div><div class="sb-ruler"><span>LEFT</span><span>LED 9 · CENTRE</span><span>RIGHT</span></div><p class="sb-caption" aria-live="polite"></p></div>
+        <div class="sb-picks"><div class="sb-label">Visual direction</div><div class="sb-choices" role="group" aria-label="Animation choices"></div><p class="sb-detail" aria-live="polite"></p></div>
+      </div>
+      <aside class="sb-aside" aria-label="Proposed Decky settings">
+        <div class="sb-aside-head"><strong>Controller signals</strong><span class="sb-concept">CONCEPT</span></div>
+        <div class="sb-group">Live sample</div>
+        <div class="sb-setting"><label for="sb-motion-battery">Controller 2 battery</label><span class="sb-value" id="sb-motion-battery-value">41%</span></div>
+        <input id="sb-motion-battery" class="sb-range cursor-interaction" type="range" min="0" max="100" value="41" aria-label="Controller 2 battery percentage">
+        <div class="sb-actions"><button type="button" class="sb-action cursor-interaction" id="sb-motion-charge">Simulate charge to 100%</button><button type="button" class="sb-action cursor-interaction" id="sb-motion-replay">Replay event</button></div>
+        <p class="sb-hint" id="sb-motion-rule">The motion runs for as long as charging is reported below 100%. At 100%, one small completion cue, then it stops.</p>
+        <div class="sb-group">Charging visibility</div>
+        <div class="sb-setting"><label for="sb-motion-where">While charging</label><select id="sb-motion-where" class="cursor-interaction"><option value="home">On Home</option><option value="everywhere" selected>Home + in game</option><option value="off">Off</option></select></div>
+        <p class="sb-hint">Optional long-running signal. It gives way to urgent events and the final Steam Families countdown.</p>
+        <p class="sb-micro">Preview sequences repeat here for comparison. Connect and low-battery alerts would play once per event; only charging stays in motion.</p>
+      </aside>
+    </div>
+  </section>
+  <script>
+    (()=>{
+      const root=document.getElementById('sb-motion-lab');
+      const q=s=>root.querySelector(s);
+      const OFF='#080c10', CYAN='#0091dc', MINT='#00b42d', AMBER='#e66e00', RED='#dc0c18', WHITE='#f6f5ef', SOFT='#3e8d92';
+      const state={scene:'charging',variant:0,battery:41,where:'everywhere',glow:0.9,speed:1};
+      const content={
+        connect:{title:'Controller 2',status:'Connected',variants:[['Magnetic welcome','Two soft currents meet, create a quick white glint, then reveal the actual battery.'],['Arc return','A fine point traverses the bar, returns with a fading echo, then the charge settles.'],['Twin bloom','Two points emerge at the centre, open outward, and leave a calm battery gauge.']]},
+        gauge:{title:'Controller 2',status:'Battery gauge',variants:[['Quiet fill','A still gauge. Motion is reserved for a meaningful change.'],['Bright tip','A white tip marks the exact end of the battery fill.'],['Soft horizon','A broad lower-intensity glow, with a precise end marker.']]},
+        low:{title:'Controller 2',status:'Low battery',variants:[['Last ember','The bar collapses to the remaining charge, then two warm warning beats.'],['Signal flare','A red warning ripples from the remaining charge to the far edge and back.'],['Afterglow','A vivid double pulse resolves into a dim, steady red remainder.']]},
+        charging:{title:'Controller 2',status:'Charging · continuous',variants:[['Photon current','A white particle crosses only the charged area and gently melts into its bright tip.'],['Tidal fill','A broad wave of light rolls through the filled area, rests, then begins again.'],['Spark lattice','Small highlights follow each other through the charge and gather at the tip.']]},
+        duo:{title:'P1 96% · P2',status:'Two controllers',variants:[['Twin reveal','Both gauges grow from the outer edges; the two white tips appear only once the reveal is complete.'],['Two signatures','A coloured highlight introduces each gauge, left then right; both white tips appear at the end.'],['Mirror greeting','Two coloured streams approach the dark centre and withdraw; the white tips mark the final levels.']]}
+      };
+      const leds=Array.from({length:17},()=>{const e=document.createElement('i');q('.sb-logic').appendChild(e);return e});
+      let epoch=performance.now(),chargeStart=0,chargeFrom=41,finishAt=-999;
+      const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+      const ease=x=>{const y=clamp(x,0,1);return y*y*(3-2*y)};
+      function blank(){return Array(17).fill(OFF)}
+      function put(a,i,c){if(i>=0&&i<17)a[i]=c}
+      function fill(a,x,y,c){for(let i=Math.max(0,x);i<=Math.min(16,y);i++)put(a,i,c)}
+      function restoredFrame(){const a=blank();fill(a,0,4,'#5a8fa2');fill(a,5,8,'#6c8da9');fill(a,9,11,'#8e8fb2');return a}
+      function gauge(a,percent,color=MINT,tip=false){const n=Math.max(percent>0?1:0,Math.round(percent/100*17));fill(a,0,n-1,color);if(tip&&n)put(a,n-1,WHITE)}
+      function duoBase(t,animated,showTips=false){
+        const a=blank(),left=Math.round(.96*8),right=Math.max(state.battery>0?1:0,Math.round(state.battery/100*8));
+        const progress=animated?ease(t/1.45):1;
+        const nl=Math.round(left*progress),nr=Math.round(right*progress);
+        const secondColour=state.battery<=20?RED:state.battery<=35?AMBER:MINT;
+        fill(a,0,nl-1,MINT);fill(a,17-nr,16,secondColour);
+        if(showTips&&nl)put(a,nl-1,WHITE);
+        if(showTips&&nr)put(a,17-nr,WHITE);
+        put(a,8,OFF);
+        return a;
+      }
+      function frame(t){
+        const a=blank(),v=state.variant,s=state.scene,b=state.battery,n=Math.max(b>0?1:0,Math.round(b/100*17));
+        if(s==='gauge'){gauge(a,b,v===2?SOFT:MINT,v!==0);return a}
+        if(s==='charging'){
+          if(b>=100){const f=(performance.now()-finishAt)/1000;if(f>=0&&f<.9){gauge(a,100,MINT,false);let spread=Math.floor(ease(f/.9)*9);fill(a,8-spread,8+spread,f<.42?WHITE:MINT);return a}return restoredFrame()}
+          gauge(a,b,CYAN,false);
+          if(!n||state.where==='off')return a;
+          const phase=t%(v===1?3.2:2.55);
+          if(v===0){const pos=Math.floor(ease(phase/1.95)*n);if(phase<1.95){put(a,Math.min(n-1,pos),WHITE);put(a,pos-1,'#baf5f0')}else put(a,n-1,WHITE)}
+          if(v===1){const center=ease(phase/2.75)*(n+3)-2;for(let i=0;i<n;i++){const d=Math.abs(i-center);if(d<2.8)put(a,i,d<1?WHITE:'#9de8ea')}put(a,n-1,WHITE)}
+          if(v===2){const p=phase/2.15;for(let k=0;k<3;k++){const x=Math.floor(((p+k/3)%1)*n);if(phase<2.15)put(a,x,k===0?WHITE:'#a4f1ef')}put(a,n-1,WHITE)}
+          return a;
+        }
+        if(s==='duo'){
+          const phase=t%5.6;
+          if(v===0)return duoBase(phase,true,phase>=1.45);
+          if(v===1){const out=duoBase(0,false,phase>=3.3),leftMax=7,rightCount=Math.max(state.battery>0?1:0,Math.round(state.battery/100*8));
+            if(phase<1.7){put(out,Math.min(leftMax,Math.floor(ease(phase/1.7)*(leftMax+1))),'#bbf4e2')}
+            else if(phase<3.3&&rightCount){put(out,16-Math.min(rightCount-1,Math.floor(ease((phase-1.7)/1.6)*rightCount)),'#ffe5ad')}return out}
+          const out=duoBase(0,false,phase>=3.4),inner=7;
+          if(phase<3.4){const step=phase<1.45?Math.round(ease(phase/1.45)*inner):phase<1.9?inner:Math.round((1-ease((phase-1.9)/1.45))*inner);put(out,step,WHITE);put(out,16-step,WHITE)}return out;
+        }
+        if(s==='connect'){
+          const phase=t%6.0;
+          if(v===0){if(phase<1.3){const k=Math.floor(ease(phase/1.3)*8);put(a,k,CYAN);put(a,16-k,CYAN);put(a,k-1,'#8eeaee');put(a,17-k,'#8eeaee')}else if(phase<1.75){fill(a,6,10,WHITE)}else gauge(a,b,MINT,true)}
+          if(v===1){if(phase<2.3){let x=Math.floor(ease(phase<1.15?phase/1.15:2-phase/1.15)*16);put(a,x,WHITE);put(a,x-1,CYAN);put(a,x+1,CYAN)}else gauge(a,b,MINT,true)}
+          if(v===2){if(phase<1.65){let k=Math.floor(ease(phase/1.65)*8);put(a,8-k,WHITE);put(a,8+k,WHITE);put(a,7-k,CYAN);put(a,9+k,CYAN)}else gauge(a,b,MINT,true)}
+          return a;
+        }
+        if(s==='low'){
+          const phase=t%6.2,low=Math.min(17,Math.max(1,Math.round(b/100*17)));
+          if(v===0){if(phase<1.25){fill(a,0,Math.max(low-1,Math.round((1-ease(phase/1.25))*16)),AMBER)}else{fill(a,0,low-1,RED);if((phase>1.5&&phase<1.73)||(phase>1.91&&phase<2.15))put(a,low-1,WHITE)}}
+          if(v===1){fill(a,0,low-1,RED);if(phase<2.4){let k=Math.floor((phase<1.2?phase/1.2:2-phase/1.2)*16);put(a,k,WHITE);put(a,k-1,RED);put(a,k+1,RED)}}
+          if(v===2){fill(a,0,low-1,phase<2.2&&((phase%.92)<.24||(phase%.92)>.38&&(phase%.92)<.58)?WHITE:RED);if(phase<2.2&&phase%.92<.24){put(a,8,RED);put(a,7,AMBER);put(a,9,AMBER)}}
+          return a;
+        }
+        return a;
+      }
+      function updateInfo(){
+        const s=state.scene,desc=content[s],variation=desc.variants[state.variant];
+        q('.sb-main').textContent=s==='duo'?`P1 96% · P2 ${state.battery}%`:`Controller 2 · ${state.battery}%`;
+        q('.sb-status').textContent=s==='charging'?(state.battery>=100?'Fully charged · previous signal restored':state.where==='off'?'Charging animation off':'Charging · continuous'):desc.status;
+        q('.sb-hud-left').textContent=s==='duo'?'Two controllers':'Controller 2';
+        q('.sb-hud-right').textContent=s==='duo'?`96% · ${state.battery}%`:`${state.battery}%${s==='charging'&&state.battery<100?' · charging':''}`;
+        q('.sb-hud-right').style.color=s==='low'?RED:s==='charging'?CYAN:s==='duo'?(state.battery<=20?RED:state.battery<=35?AMBER:MINT):MINT;
+        q('.sb-caption').textContent=s==='charging'?(state.battery>=100?'At 100%, the moving highlight ends and the previous signal returns.':'The fill means battery level. The moving light means charging is in progress.'):s==='duo'?'8 LEDs per controller, mirrored fill. White tips appear after the animation; centre LED off.':s==='gauge'?'A stable level; no perpetual flourish when nothing changes.':'Demo repeats here. The actual alert would play once, then restore the prior signal.';
+        const ruler=q('.sb-ruler').children;
+        ruler[0].textContent=s==='duo'?'P1 · EDGE →':'LEFT';
+        ruler[1].textContent=s==='duo'?'CENTRE OFF':'LED 9 · CENTRE';
+        ruler[2].textContent=s==='duo'?'← EDGE · P2':'RIGHT';
+        q('.sb-detail').textContent=variation[1];
+        q('.sb-logic').setAttribute('aria-label',`${desc.title} ${state.battery} percent. ${variation[0]}. ${s==='charging'&&state.battery>=100?'Charging animation stopped.':''}`);
+        q('#sb-motion-battery-value').textContent=`${state.battery}%`;
+        q('#sb-motion-battery').value=state.battery;
+        q('#sb-motion-charge').disabled=state.battery>=100;
+        root.querySelectorAll('.sb-tab').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.scene===s)));
+        q('.sb-choices').replaceChildren(...desc.variants.map(([name],index)=>{const button=document.createElement('button');button.type='button';button.className='sb-choice cursor-interaction';button.textContent=`${String.fromCharCode(65+index)} · ${name}`;button.setAttribute('aria-pressed',String(index===state.variant));button.addEventListener('click',()=>{state.variant=index;epoch=performance.now();updateInfo();draw();save()});return button}));
+      }
+      function draw(){
+        const now=performance.now();
+        if(chargeStart){const elapsed=(now-chargeStart)/1000;const next=Math.min(100,Math.round(chargeFrom+(100-chargeFrom)*elapsed/10));if(next!==state.battery){state.battery=next;updateInfo()}if(next>=100){chargeStart=0;finishAt=now;updateInfo();save()}}
+        const frameColors=frame((now-epoch)/1000*state.speed);
+        const stops=frameColors.map((c,i)=>`${c} ${((i+.5)/17*100).toFixed(2)}%`).join(',');
+        const gradient=`linear-gradient(90deg,${stops})`;
+        for(const selector of ['.sb-light','.sb-bloom','.sb-reflection'])q(selector).style.background=gradient;
+        q('.sb-bloom').style.opacity=String(state.glow);
+        leds.forEach((element,i)=>{element.style.background=frameColors[i]===OFF?'#303e48':frameColors[i]});
+      }
+      function save(){if(globalThis.openai?.setWidgetState)globalThis.openai.setWidgetState({modelContent:{scene:state.scene,variant:state.variant,battery:state.battery,where:state.where}}).catch(()=>{})}
+      const saved=globalThis.openai?.widgetState?.modelContent;
+      if(saved&&typeof saved==='object'){
+        if(content[saved.scene])state.scene=saved.scene;
+        if(Number.isInteger(saved.variant)&&saved.variant>=0&&saved.variant<=2)state.variant=saved.variant;
+        if(Number.isInteger(saved.battery))state.battery=clamp(saved.battery,0,100);
+        if(['off','home','everywhere'].includes(saved.where))state.where=saved.where;
+      }
+      q('#sb-motion-where').value=state.where;
+      root.querySelectorAll('.sb-tab').forEach(button=>button.addEventListener('click',()=>{state.scene=button.dataset.scene;state.variant=0;epoch=performance.now();updateInfo();draw();save()}));
+      q('#sb-motion-battery').addEventListener('input',e=>{state.battery=Number(e.target.value);chargeStart=0;if(state.battery===100)finishAt=-999;epoch=performance.now();updateInfo();draw();save()});
+      q('#sb-motion-charge').addEventListener('click',()=>{if(state.battery>=100)return;chargeFrom=state.battery;chargeStart=performance.now();state.scene='charging';state.variant=state.variant%3;epoch=performance.now();updateInfo();draw();save()});
+      q('#sb-motion-replay').addEventListener('click',()=>{epoch=performance.now();draw()});
+      q('#sb-motion-where').addEventListener('change',e=>{state.where=e.target.value;updateInfo();draw();save()});
+      updateInfo();draw();const timer=setInterval(draw,65);
+      if(globalThis.Tweak){const tweak=new Tweak({container:q('.sb-stage'),onChange:()=>{draw()}});tweak.addSlider(state,'glow',{label:'Hardware halo',min:0.3,max:1,step:0.05});tweak.addSlider(state,'speed',{label:'Animation pace',min:0.6,max:1.5,step:0.1})}
+    })();
+  </script>
+</div>

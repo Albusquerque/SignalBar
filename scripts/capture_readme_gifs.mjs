@@ -9,6 +9,7 @@ const [variantsPath, languagePath, outputPath] = process.argv.slice(2);
 if (!variantsPath || !languagePath || !outputPath) {
   throw new Error("Usage: node scripts/capture_readme_gifs.mjs <variants.html> <language.html> <output-dir>");
 }
+const performanceOnly = process.argv.includes("--performance-only");
 
 const INTERVAL_MS = 125;
 const CAPTURE_CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'";
@@ -82,16 +83,34 @@ async function captureRecording(source) {
 
 function lerp(a, b, t) { return Math.round(a + (b - a) * t); }
 function mix(a, b, t) { return a.map((value, i) => lerp(value, b[i], t)); }
+function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
+
+function temperatureColor(temperature) {
+  const cool = [43, 213, 230];
+  const warm = [255, 204, 61];
+  const hot = [244, 70, 76];
+  if (temperature <= 64) return mix(cool, warm, clamp((temperature - 44) / 20, 0, 1));
+  return mix(warm, hot, clamp((temperature - 64) / 20, 0, 1));
+}
 
 function performanceFrame(t) {
-  const cpu = Math.max(0, Math.min(1, .38 + .13 * Math.sin(t * 4.2) + .1 * Math.sin(t * 1.1)));
-  const gpu = Math.max(0, Math.min(1, .73 + .10 * Math.sin(t * 2.1 + .5)));
-  const cpuLit = Math.round(cpu * 8);
-  const gpuLit = Math.round(gpu * 8);
-  const color = mix([49, 208, 220], [252, 184, 70], .35 + .23 * Math.sin(t * 1.4));
-  return Array.from({ length: 17 }, (_, i) => i === 8 ? [0, 0, 0]
-    : i < 8 ? i < cpuLit ? color : [0, 0, 0]
-      : i - 9 < gpuLit ? mix([246, 154, 55], [245, 83, 73], .20 + .25 * Math.sin(t * 1.2)) : [0, 0, 0]);
+  const phase = 2 * Math.PI * t / 4;
+  const cpuHeat = (1 - Math.cos(phase)) / 2;
+  const gpuHeat = (1 - Math.cos(phase + 1.45)) / 2;
+  const cpuLoad = Math.round(28 + 50 * cpuHeat);
+  const gpuLoad = Math.round(42 + 52 * gpuHeat);
+  const cpuTemp = Math.round(44 + 38 * cpuHeat);
+  const gpuTemp = Math.round(50 + 35 * gpuHeat);
+  const cpuLit = Math.round(cpuLoad / 100 * 8);
+  const gpuLit = Math.round(gpuLoad / 100 * 8);
+  const cpuColor = temperatureColor(cpuTemp);
+  const gpuColor = temperatureColor(gpuTemp);
+  // Mirrored mixed mode: CPU grows from the left edge, GPU from the right.
+  // LED 9 is the unlit separator between the two 8-LED meters.
+  const colors = Array.from({ length: 17 }, (_, i) => i === 8 ? [0, 0, 0]
+    : i < 8 ? i < cpuLit ? cpuColor : [0, 0, 0]
+      : i >= 17 - gpuLit ? gpuColor : [0, 0, 0]);
+  return { colors, cpuLoad, gpuLoad, cpuTemp, gpuTemp, cpuColor, gpuColor };
 }
 
 function countdownFrame(t) {
@@ -111,20 +130,49 @@ async function captureBase(source, name, makeFrame, durationMs) {
   // has no animated Performance or Countdown state, and drive only its 17 LEDs.
   await frame.locator(".sb-machine").waitFor();
   await frame.locator(".sb-center-marker").evaluate((marker) => { marker.style.display = "none"; });
+  if (name === "performance") {
+    await frame.locator(".sb-stage-column").evaluate((column) => {
+      column.querySelector(".sb-stage-label").textContent = "CPU + GPU · MIRRORED";
+      const head = column.querySelector(".sb-readout-head");
+      head.innerHTML = '<span class="sb-perf-stat"><span class="sb-perf-tag">CPU</span><strong class="sb-cpu-value"></strong></span><span class="sb-perf-stat"><span class="sb-perf-tag">GPU</span><strong class="sb-gpu-value"></strong></span>';
+      const guide = column.querySelector(".sb-center-marker");
+      guide.textContent = "LENGTH = LOAD  ·  COLOUR = TEMPERATURE";
+      guide.style.display = "block";
+      const style = document.createElement("style");
+      style.textContent = `
+        #sb-alerts-concept .sb-readout-head { align-items: center; margin-bottom: 12px; }
+        #sb-alerts-concept .sb-perf-stat { display: flex; align-items: baseline; gap: 7px; white-space: nowrap; }
+        #sb-alerts-concept .sb-perf-tag { color: #e9f0f6; font-size: 15px; font-weight: 800; letter-spacing: .04em; }
+        #sb-alerts-concept .sb-perf-stat strong { font-size: 15px; font-variant-numeric: tabular-nums; font-weight: 750; }
+        #sb-alerts-concept .sb-center-marker { margin-top: 10px; font-size: 10px; letter-spacing: .08em; }
+      `;
+      document.head.appendChild(style);
+    });
+  }
   const folder = path.join(scratch, name);
   await fs.mkdir(folder, { recursive: true });
   const count = Math.ceil(durationMs / INTERVAL_MS);
   for (let i = 0; i < count; i++) {
-    const colors = makeFrame(i * INTERVAL_MS / 1000);
-    await frame.locator(".sb-stage-column").evaluate((column, rgb) => {
+    const sample = makeFrame(i * INTERVAL_MS / 1000);
+    await frame.locator(".sb-stage-column").evaluate((column, data) => {
+      const rgb = Array.isArray(data) ? data : data.colors;
       const cellsHost = column.querySelector(".sb-logic");
       if (!cellsHost.children.length) for (let index = 0; index < 17; index++) cellsHost.appendChild(document.createElement("span"));
       const gradient = `linear-gradient(90deg, ${rgb.map((color, index) => `rgb(${color.join(",")}) ${((index + .5) / 17 * 100).toFixed(2)}%`).join(",")})`;
       column.querySelector(".sb-light-core").style.background = gradient;
       column.querySelector(".sb-light-bloom").style.background = gradient;
       [...cellsHost.children].forEach((cell, index) => { cell.style.background = `rgb(${rgb[index].join(",")})`; });
-      column.querySelector("#sb-alerts-status").textContent = "";
-    }, colors);
+      if (!Array.isArray(data)) {
+        const cpu = column.querySelector(".sb-cpu-value");
+        const gpu = column.querySelector(".sb-gpu-value");
+        cpu.textContent = `${data.cpuLoad}% · ${data.cpuTemp}°C`;
+        gpu.textContent = `${data.gpuLoad}% · ${data.gpuTemp}°C`;
+        cpu.style.color = `rgb(${data.cpuColor.join(",")})`;
+        gpu.style.color = `rgb(${data.gpuColor.join(",")})`;
+      } else {
+        column.querySelector("#sb-alerts-status").textContent = "";
+      }
+    }, sample);
     await frame.locator(".sb-stage-column").screenshot({ path: path.join(folder, `${String(i).padStart(4, "0")}.png`) });
   }
   encode(name, folder);
@@ -132,12 +180,14 @@ async function captureBase(source, name, makeFrame, durationMs) {
 }
 
 try {
-  await captureVariant(variantsPath, "notification-ample", 3600, "notification");
-  await captureVariant(variantsPath, "screenshot-bloom", 3250, "screenshot");
-  await captureVariant(variantsPath, "achievement-twoway", 4850, "achievement");
-  await captureRecording(languagePath);
+  if (!performanceOnly) {
+    await captureVariant(variantsPath, "notification-ample", 3600, "notification");
+    await captureVariant(variantsPath, "screenshot-bloom", 3250, "screenshot");
+    await captureVariant(variantsPath, "achievement-twoway", 4850, "achievement");
+    await captureRecording(languagePath);
+  }
   await captureBase(languagePath, "performance", performanceFrame, 4000);
-  await captureBase(languagePath, "countdown", countdownFrame, 4800);
+  if (!performanceOnly) await captureBase(languagePath, "countdown", countdownFrame, 4800);
 } finally {
   await browser.close();
   await fs.rm(scratch, { recursive: true, force: true });

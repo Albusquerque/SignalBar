@@ -22,11 +22,14 @@ VARIANTS = {
     "charging": ("current", "breath", "spark"),
     "duo": ("twin", "focus", "double-welcome"),
 }
-DURATIONS = {"connect": 2.7, "low": 3.0, "charging": 2.8, "persistent": 3.0, "duo": 3.0}
+DURATIONS = {"connect": 3.2, "low": 3.2, "charging": 2.8, "persistent": 3.0, "duo": 6.0}
 
 
-def _colour(percent):
-    return RED if percent <= 20 else AMBER if percent <= 35 else GREEN
+def _colour(percent, values=None):
+    values = values or {}
+    threshold = values.get("controller_low_threshold", 20)
+    key, fallback = ("low", RED) if percent <= threshold else ("medium", AMBER) if percent <= max(35, threshold + 5) else ("normal", GREEN)
+    return tuple(values.get(f"controller_colour_{key}", fallback))
 
 
 def _render_percent(item):
@@ -47,12 +50,12 @@ def _scaled(colour, factor):
     return tuple(round(channel * factor) for channel in colour)
 
 
-def _gauge(percent, *, width=17, start=0, from_right=False, colour=None):
+def _gauge(percent, *, width=17, start=0, from_right=False, colour=None, values=None):
     frame = [BLACK] * LED_COUNT
     if percent is None:
         return frame
     count = min(width, max(1 if percent > 0 else 0, round(percent * width / 100)))
-    chosen = colour or _colour(percent)
+    chosen = colour or _colour(percent, values)
     if from_right:
         _fill(frame, start + width - count, start + width - 1, chosen)
     else:
@@ -60,89 +63,181 @@ def _gauge(percent, *, width=17, start=0, from_right=False, colour=None):
     return frame
 
 
-def _duo(first, second, variant, elapsed, intro_age=None):
-    frame = _gauge(first, width=8, start=0)
-    right = _gauge(second, width=8, start=9, from_right=True)
+def _duo(first, second, variant, elapsed, intro_age=None, values=None):
+    frame = _gauge(first, width=8, start=0, values=values)
+    right = _gauge(second, width=8, start=9, from_right=True, values=values)
     for index in range(9, 17):
         frame[index] = right[index]
     frame[8] = BLACK
-    if variant == "focus":
-        dim_left = int(elapsed / 1.3) % 2 == 1
-        for index in list(range(8) if dim_left else range(9, 17)):
-            frame[index] = _scaled(frame[index], .45)
-    elif variant == "double-welcome" and intro_age is not None and intro_age < 1.4:
-        left = min(8, math.ceil(intro_age * 8 / 1.4))
-        right_count = min(8, math.ceil(intro_age * 8 / 1.4))
-        for index in range(left, 8):
+    left_lit = [index for index in range(8) if frame[index] != BLACK]
+    right_lit = [index for index in range(9, 17) if frame[index] != BLACK]
+    left_tip = left_lit[-1] if left_lit else None
+    right_tip = right_lit[0] if right_lit else None
+    # None means a settled, always-on gauge, not the start of an intro.
+    age = float("inf") if intro_age is None else max(0.0, intro_age)
+    reveal_end = {"twin": 1.45, "focus": 3.3, "double-welcome": 3.4}[variant]
+    if variant == "twin" and age < reveal_end:
+        fraction = age / reveal_end
+        left_count = round(sum(pixel != BLACK for pixel in frame[:8]) * fraction)
+        right_count = round(sum(pixel != BLACK for pixel in frame[9:]) * fraction)
+        for index in range(left_count, 8):
             frame[index] = BLACK
         for index in range(9, 17 - right_count):
             frame[index] = BLACK
+    elif variant == "focus" and age < reveal_end:
+        if age < 1.7 and first is not None:
+            index = min(7, int(age / 1.7 * 8))
+            if index == left_tip:
+                index -= 1
+            if index >= 0:
+                frame[index] = WHITE
+        elif second is not None:
+            count = min(8, int((age - 1.7) / 1.6 * 8) + 1)
+            index = 17 - count
+            if index == right_tip:
+                index += 1
+            if index < LED_COUNT:
+                frame[index] = WHITE
+    elif variant == "double-welcome" and age < reveal_end:
+        if age < 1.45:
+            step = min(7, int(age / 1.45 * 8))
+        elif age < 1.9:
+            step = 7
+        else:
+            step = max(0, min(7, int((3.4 - age) / 1.5 * 8)))
+        left_index = step - 1 if step == left_tip else step
+        right_index = 17 - step if 16 - step == right_tip else 16 - step
+        if first is not None and left_index >= 0:
+            frame[left_index] = WHITE
+        if second is not None and right_index < LED_COUNT:
+            frame[right_index] = WHITE
+    if age >= reveal_end:
+        if left_tip is not None:
+            frame[left_tip] = WHITE
+        if right_tip is not None:
+            frame[right_tip] = WHITE
+    frame[8] = BLACK
     return frame
 
 
-def controller_frame(kind, variant, elapsed, percent=74, second_percent=25, *, intro_age=None):
+def _tint_duo_charging(frame, controllers, values):
+    """Keep each charging half blue while preserving white motion and endpoints."""
+    frame = list(frame)
+    brightness = values.get("controller_gauge_brightness", 100) / 100.0
+    white = _scaled(WHITE, brightness)
+    blue = _scaled(tuple(values.get("controller_colour_charging", CYAN)), brightness)
+    for side_number, item in enumerate(controllers[:2]):
+        percent = _render_percent(item)
+        if item["charging"] is not True or percent is None or percent >= 100:
+            continue
+        first_side = side_number == 0
+        charge_gauge = _gauge(percent, width=8, start=0 if first_side else 9,
+                               from_right=not first_side, colour=blue)
+        for index in (range(0, 8) if first_side else range(9, 17)):
+            if charge_gauge[index] != BLACK and frame[index] not in (BLACK, white):
+                frame[index] = blue
+    frame[8] = BLACK
+    return frame
+
+
+def controller_frame(kind, variant, elapsed, percent=74, second_percent=25, *, intro_age=None, values=None, continuous=False):
     """Pure renderer. Unknown battery levels never become invented percentages."""
     if kind not in VARIANTS or variant not in VARIANTS[kind]:
         raise ValueError("unknown controller signal variant")
     t = max(0.0, float(elapsed))
+    values = values or {}
+    cyan = tuple(values.get("controller_colour_charging", CYAN))
+    red = tuple(values.get("controller_colour_low", RED))
+    brightness = values.get("controller_gauge_brightness", 100) / 100.0
+
+    def finish(pixels):
+        return normalize_frame([_scaled(pixel, brightness) for pixel in pixels])
+
     frame = [BLACK] * LED_COUNT
     if kind == "duo":
-        return normalize_frame(_duo(percent, second_percent, variant, t, intro_age))
+        return finish(_duo(percent, second_percent, variant, t, intro_age, values))
     if kind == "persistent":
-        frame = _gauge(percent)
-        if variant == "tip" and any(frame):
+        frame = _gauge(percent, values=values)
+        if variant == "tip" and any(pixel != BLACK for pixel in frame):
             frame[max(index for index, pixel in enumerate(frame) if pixel != BLACK)] = WHITE
         elif variant == "horizon":
             frame = [_scaled(pixel, .58) for pixel in frame]
-        return normalize_frame(frame)
-    if t >= DURATIONS[kind]:
-        return normalize_frame(frame)
+        return finish(frame)
+    if kind == "charging" and continuous:
+        t %= {"current": 2.55, "breath": 3.2, "spark": 2.55}[variant]
+    elif t >= DURATIONS[kind]:
+        return finish(frame)
     if kind == "connect":
-        if t < 1.35:
+        intro_end = {"welcome": 1.3, "orbit": 2.3, "handshake": 1.65}[variant]
+        if t < intro_end:
             if variant == "welcome":
-                step = min(3, int(t / .34))
-                _fill(frame, step * 2, step * 2 + 1, CYAN)
-                _fill(frame, 15 - step * 2, 16 - step * 2, CYAN)
+                step = min(7, int(t / 1.3 * 8))
+                frame[step] = cyan
+                frame[16 - step] = cyan
+                if step:
+                    frame[step - 1] = _scaled(cyan, .45)
+                    frame[17 - step] = _scaled(cyan, .45)
             elif variant == "orbit":
-                index = min(16, int(t / 1.35 * 17))
+                phase = t / 1.15 if t < 1.15 else 2 - t / 1.15
+                index = min(16, max(0, int(phase * 16)))
                 frame[index] = WHITE
                 if index:
-                    frame[index - 1] = CYAN
+                    frame[index - 1] = cyan
+                if index < 16:
+                    frame[index + 1] = cyan
             else:
-                step = min(8, int(t / 1.35 * 9))
-                frame[step] = CYAN
-                frame[16 - step] = CYAN
-        elif t < 1.65 and variant != "orbit":
+                step = min(8, int(t / 1.65 * 9))
+                frame[8 - step] = WHITE
+                frame[8 + step] = WHITE
+        elif t < 1.75 and variant == "welcome":
             _fill(frame, 6, 10, WHITE)
         else:
-            frame = _gauge(percent)
+            frame = _gauge(percent, values=values)
+            if percent is not None and percent > 0:
+                frame[max(index for index, pixel in enumerate(frame) if pixel != BLACK)] = WHITE
     elif kind == "low":
-        if variant == "beacon" and t < 1.65 and int(t / .38) % 2 == 0:
-            _fill(frame, 0, 3, RED)
-            _fill(frame, 13, 16, RED)
-        elif variant == "drain" and t < 1.65:
-            _fill(frame, 0, 16 - int(t / 1.65 * 15), RED)
-        elif variant == "heartbeat" and t < 1.7:
-            bright = t % .85 < .21 or .34 < t % .85 < .54
-            frame = _gauge(percent, colour=RED if bright else _scaled(RED, .35))
-            if bright:
-                frame[7] = RED
-                frame[9] = RED
-        else:
-            frame = _gauge(percent, colour=RED)
-    elif kind == "charging":
-        frame = _gauge(percent, colour=CYAN)
-        lit = [index for index, pixel in enumerate(frame) if pixel != BLACK]
-        if variant == "current" and lit:
-            frame[lit[int(t / .28) % len(lit)]] = WHITE
-        elif variant == "breath":
-            frame = [_scaled(pixel, .58 + .42 * (1 + math.sin(t * 3)) / 2) for pixel in frame]
-        elif variant == "spark" and lit:
-            if t < 1.9:
-                frame[lit[min(len(lit) - 1, int(t / 1.9 * len(lit)))]] = WHITE
+        if variant == "beacon":
+            if t < 1.25:
+                count = max(round((1 - t / 1.25) * 17), round((percent or 0) / 100 * 17))
+                _fill(frame, 0, count - 1, tuple(values.get("controller_colour_medium", AMBER)))
             else:
-                frame[lit[-1]] = GREEN
-    return normalize_frame(frame)
+                frame = _gauge(percent, colour=red)
+                if (1.5 < t < 1.73 or 1.91 < t < 2.15) and any(pixel != BLACK for pixel in frame):
+                    frame[max(index for index, pixel in enumerate(frame) if pixel != BLACK)] = WHITE
+        elif variant == "drain":
+            frame = _gauge(percent, colour=red)
+            if t < 2.4:
+                phase = t / 1.2 if t < 1.2 else 2 - t / 1.2
+                frame[min(16, max(0, int(phase * 16)))] = WHITE
+        else:
+            beat = t < 2.2 and (t % .92 < .24 or .38 < t % .92 < .58)
+            frame = _gauge(percent, colour=WHITE if beat else _scaled(red, .7))
+            if beat:
+                frame[8] = red
+    elif kind == "charging":
+        frame = _gauge(percent, colour=cyan)
+        lit = [index for index, pixel in enumerate(frame) if pixel != BLACK]
+        if lit and variant == "current":
+            if t < 1.95:
+                index = lit[min(len(lit) - 1, int(t / 1.95 * len(lit)))]
+                frame[index] = WHITE
+                if index:
+                    frame[index - 1] = _scaled(WHITE, .65)
+            else:
+                frame[lit[-1]] = WHITE
+        elif lit and variant == "breath":
+            centre = t / 2.75 * (len(lit) + 3) - 2
+            for index in lit:
+                distance = abs(index - centre)
+                if distance < 2.8:
+                    frame[index] = WHITE if distance < 1 else _scaled(WHITE, .7)
+            frame[lit[-1]] = WHITE
+        elif lit and variant == "spark":
+            for offset in range(3):
+                index = lit[int(((t / 2.15 + offset / 3) % 1) * len(lit))]
+                frame[index] = WHITE if offset == 0 else _scaled(WHITE, .68)
+            frame[lit[-1]] = WHITE
+    return finish(frame)
 
 
 def _normalise_controllers(raw):
@@ -184,6 +279,10 @@ class ControllerProvider:
         self._started_at = 0.0
         self._roster_changed_at = 0.0
         self._warned = {}
+        self._charging_since = {}
+        self._charge_completed_at = {}
+        self._last_update_at = None
+        self._style = {}
 
     def clear_transients(self):
         with self._lock:
@@ -193,8 +292,24 @@ class ControllerProvider:
         with self._lock:
             self._controllers.clear()
             self._warned.clear()
+            self._charging_since.clear()
+            self._charge_completed_at.clear()
             self._active = None
             self._initialized = False
+            self._last_update_at = None
+
+    def _expire(self):
+        # The frontend renews this lease on every successful two-second query.
+        # A stopped collector must not leave an old battery gauge on forever.
+        if self._last_update_at is not None and self._clock() - self._last_update_at > 10:
+            self._controllers.clear()
+            self._warned.clear()
+            self._charging_since.clear()
+            self._charge_completed_at.clear()
+            self._initialized = False
+            self._last_update_at = None
+            if self._active and not self._active[3]:
+                self._active = None
 
     def _start(self, kind, controller, values, preview=False, variant=""):
         if values.get("mode") == "disabled":
@@ -212,17 +327,38 @@ class ControllerProvider:
         fresh = _normalise_controllers(raw)
         started_kind = None
         with self._lock:
+            self._expire()
+            self._style = dict(values)
+            self._last_update_at = self._clock()
             previous = self._controllers
+            # Steam may reorder its list between polls; do not swap player sides.
+            fresh = {**{identifier: fresh[identifier] for identifier in previous if identifier in fresh},
+                     **{identifier: item for identifier, item in fresh.items() if identifier not in previous}}
             self._controllers = fresh
             if set(previous) != set(fresh):
                 self._roster_changed_at = self._clock()
             for identifier in set(previous) - set(fresh):
                 self._warned.pop(identifier, None)
+                self._charging_since.pop(identifier, None)
+                self._charge_completed_at.pop(identifier, None)
                 if self._active and self._active[2].get("id") == identifier and not self._active[3]:
                     self._active = None
-            if not self._initialized:
-                self._initialized = True
-                return None
+            initial = not self._initialized
+            self._initialized = True
+            for identifier, item in fresh.items():
+                before = previous.get(identifier)
+                if (before and before["charging"] is True and _render_percent(before) is not None
+                        and _render_percent(before) < 100 and _render_percent(item) == 100):
+                    self._charge_completed_at[identifier] = self._clock()
+                if (self._active and not self._active[3] and self._active[0] == "charging"
+                        and self._active[2]["id"] == identifier
+                        and (item["charging"] is not True or _render_percent(item) is None
+                             or _render_percent(item) == 100)):
+                    self._active = None
+                if item["charging"] is True and _render_percent(item) is not None and _render_percent(item) < 100:
+                    self._charging_since.setdefault(identifier, self._clock())
+                else:
+                    self._charging_since.pop(identifier, None)
             policy = values.get("controller_alert_context", "both")
             allowed = policy == "both" or policy == ("game" if game_running else "home")
             if not allowed:
@@ -232,25 +368,25 @@ class ControllerProvider:
                 before = previous.get(identifier)
                 percent = item["percent"]
                 level = item["level"] if percent is None else None
-                if percent is not None and percent >= threshold + 5:
+                if item["charging"] is True or (percent is not None and percent >= threshold + 5):
                     self._warned.pop(identifier, None)
                 elif level is not None and level >= 2:
                     self._warned.pop(identifier, None)
-                was_low = before is not None and before["percent"] is not None and before["percent"] <= threshold
-                was_low = was_low or (before is not None and before["percent"] is None and before["level"] == 1)
                 low = ((percent is not None and percent <= threshold) or level == 1) and item["charging"] is not True
-                if low and not was_low and identifier not in self._warned and values.get("controller_low_enabled", True):
-                    self._warned[identifier] = True
+                if low and identifier not in self._warned and values.get("controller_low_enabled", True):
                     if self._start("low", item, values):
+                        self._warned[identifier] = True
                         started_kind = "low"
-                elif before is None and started_kind != "low" and values.get("controller_connect_enabled", True):
+                elif not initial and before is None and started_kind != "low" and values.get("controller_connect_enabled", True):
                     if len(fresh) >= 2 and len(previous) == 1:
                         if self._start("duo", next(iter(fresh.values())), values):
                             started_kind = "duo"
                     else:
                         if self._start("connect", item, values):
                             started_kind = "connect"
-                elif before is not None and started_kind != "low" and before["charging"] is False and item["charging"] is True and values.get("controller_charging_enabled", True):
+                elif (before is not None and started_kind != "low" and before["charging"] is not True
+                      and item["charging"] is True and _render_percent(item) is not None
+                      and values.get("controller_charging_enabled", True)):
                     if self._start("charging", item, values):
                         started_kind = "charging"
         return started_kind
@@ -259,11 +395,13 @@ class ControllerProvider:
         if kind not in VARIANTS:
             return False
         with self._lock:
+            self._style = dict(values)
             sample = {"id": "preview", "name": "Controller 1", "percent": 14 if kind == "low" else 38 if kind == "charging" else 74, "level": None, "charging": kind == "charging"}
             return self._start(kind, sample, values, preview=True, variant=variant)
 
     def cancel_for_settings(self, values, game_running=False):
         with self._lock:
+            self._style = dict(values)
             if self._active and not self._active[3]:
                 kind = self._active[0]
                 policy = values["controller_alert_context"]
@@ -275,9 +413,16 @@ class ControllerProvider:
     def event_output(self):
         now = self._clock()
         with self._lock:
+            self._expire()
             if self._active is None:
                 return ProviderOutput("controller", None, "no controller alert")
             kind, variant, item, preview = self._active
+            if not preview:
+                item = self._controllers.get(item["id"], item)
+                if kind == "charging" and (item["charging"] is not True or _render_percent(item) is None
+                                           or _render_percent(item) == 100):
+                    self._active = None
+                    return ProviderOutput("controller", None, "charging ended")
             elapsed = now - self._started_at
             if elapsed >= DURATIONS[kind]:
                 self._active = None
@@ -287,29 +432,92 @@ class ControllerProvider:
                 others = [other for other in self._controllers.values() if other["id"] != item["id"]]
                 second = _render_percent(others[0]) if others else None
             frame = controller_frame(kind, variant, elapsed, _render_percent(item), second,
-                                     intro_age=elapsed if kind == "duo" else None)
+                                     intro_age=elapsed if kind == "duo" else None, values=self._style)
+            if kind == "duo" and not preview:
+                frame = normalize_frame(_tint_duo_charging(frame, [item, *others[:1]], self._style))
             return ProviderOutput(f"controller:{kind}", frame, f"{variant} animation")
 
     def persistent_output(self, values, game_running=False):
         policy = values.get("controller_battery_display", "off")
-        if policy == "off" or (policy == "home" and game_running):
+        charging_policy = values.get("controller_charging_display", "off")
+        gauge_allowed = policy == "everywhere" or (policy == "home" and not game_running)
+        charging_allowed = charging_policy == "everywhere" or (charging_policy == "home" and not game_running)
+        if not gauge_allowed and not charging_allowed:
             return ProviderOutput("controller-battery", None, "battery display disabled here")
         with self._lock:
+            self._expire()
             known = [item for item in self._controllers.values() if _render_percent(item) is not None]
             if not known:
                 return ProviderOutput("controller-battery", None, "battery level unavailable")
             now = self._clock()
+            completed = next((item for item in known if 0 <= now - self._charge_completed_at.get(item["id"], -100) < .9), None)
+            if charging_allowed and completed is not None:
+                progress = (now - self._charge_completed_at[completed["id"]]) / .9
+                frame = list(controller_frame("persistent", "clean", now, 100, values=values))
+                spread = min(8, int(progress * 9))
+                cue = _scaled(WHITE if progress < .5 else _colour(100, values),
+                              values.get("controller_gauge_brightness", 100) / 100.0)
+                for index in range(8 - spread, 9 + spread):
+                    frame[index] = cue
+                return ProviderOutput("controller-charge-complete", normalize_frame(frame), "controller fully charged")
+            charging = next((item for item in known if item["charging"] is True and _render_percent(item) < 100), None)
+            if charging_allowed and charging is not None:
+                variant = values.get("controller_charging_variant", "current")
+                elapsed = now - self._charging_since.get(charging["id"], now)
+                if len(known) >= 2:
+                    frame = list(controller_frame("duo", values.get("controller_duo_variant", "twin"), now,
+                                                  _render_percent(known[0]), _render_percent(known[1]),
+                                                  intro_age=now - self._roster_changed_at, values=values))
+                    frame = _tint_duo_charging(frame, known, values)
+                    intro_age = now - self._roster_changed_at
+                    reveal_end = {"twin": 1.45, "focus": 3.3, "double-welcome": 3.4}[
+                        values.get("controller_duo_variant", "twin")]
+                    brightness = values.get("controller_gauge_brightness", 100) / 100.0
+                    highlight = _scaled(WHITE, brightness)
+                    blue = _scaled(tuple(values.get("controller_colour_charging", CYAN)), brightness)
+                    for side_number, item in enumerate(known[:2]):
+                        if item["charging"] is not True or _render_percent(item) >= 100:
+                            continue
+                        first_side = side_number == 0
+                        charge_gauge = _gauge(_render_percent(item), width=8, start=0 if first_side else 9,
+                                               from_right=not first_side, colour=blue)
+                        lit = [index for index in (range(0, 8) if first_side else range(9, 17))
+                               if charge_gauge[index] != BLACK and frame[index] != BLACK]
+                        if lit and intro_age >= reveal_end:
+                            sweep = lit if first_side else list(reversed(lit))
+                            phase = (now - self._charging_since.get(item["id"], now)) % 2.55
+                            if variant == "current":
+                                frame[sweep[min(len(sweep) - 1, int(phase / 1.95 * len(sweep)))]] = highlight
+                            elif variant == "breath":
+                                centre = phase / 2.55 * (len(sweep) + 3) - 2
+                                for position, index in enumerate(sweep):
+                                    if abs(position - centre) < 2.2:
+                                        frame[index] = highlight
+                            else:
+                                for offset in range(3):
+                                    frame[sweep[int(((phase / 2.55 + offset / 3) % 1) * len(sweep))]] = highlight
+                            # A short gauge must still read blue, not become solid white.
+                            if len(sweep) > 1:
+                                frame[sweep[0]] = blue
+                    frame[8] = BLACK
+                else:
+                    frame = controller_frame("charging", variant, elapsed, _render_percent(charging),
+                                             values=values, continuous=True)
+                return ProviderOutput("controller-charging", normalize_frame(frame), "controller charging continuously")
+            if not gauge_allowed:
+                return ProviderOutput("controller-battery", None, "permanent battery gauge disabled here")
             if len(known) >= 2:
                 variant = values.get("controller_duo_variant", "twin")
                 frame = controller_frame("duo", variant, now, _render_percent(known[0]), _render_percent(known[1]),
-                                         intro_age=now - self._roster_changed_at)
+                                         intro_age=now - self._roster_changed_at, values=values)
             else:
                 variant = values.get("controller_persistent_variant", "clean")
-                frame = controller_frame("persistent", variant, now, _render_percent(known[0]))
+                frame = controller_frame("persistent", variant, now, _render_percent(known[0]), values=values)
             return ProviderOutput("controller-battery", frame, "controller battery gauge")
 
     def status(self, values, game_running=False):
         with self._lock:
+            self._expire()
             current = list(self._controllers.values())
             active = self._active
         transient = self.event_output()
@@ -322,4 +530,5 @@ class ControllerProvider:
             "variant": active[1] if active and transient.frame is not None else "",
             "colors": [list(pixel) for pixel in display.frame] if display.frame else [],
             "persistent_available": persistent.frame is not None,
+            "charging_active": persistent.provider == "controller-charging" and persistent.frame is not None,
         }

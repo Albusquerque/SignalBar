@@ -7,42 +7,46 @@ import os
 import threading
 
 DEFAULTS = {
-    "mode": "artwork",
+    "mode": "performance",
+    "display_profiles": {},
     # Retained only to migrate v0.1/v0.2 Automatic configurations.
     "performance_enabled": True,
-    "performance_metric": "gpu",
+    "performance_metric": "mixed",
     "performance_smoothing": "balanced",
-    "performance_always": False,
+    "performance_always": True,
     "mixed_direction": "mirrored",
-    "temperature_palette": "thermal",
+    "temperature_palette": "classic",
     "temperature_custom_cool": [30, 180, 230],
     "temperature_custom_middle": [245, 180, 45],
     "temperature_custom_hot": [235, 45, 55],
     "artwork_mode": "auto",
-    "artwork_manual_y": 0.72,
+    "artwork_manual_y": 0.34,
     "artwork_source": "hero",
     "artwork_profiles": {},
-    "cool_temp_c": 50.0,
-    "hot_temp_c": 90.0,
+    "cool_temp_c": 45.0,
+    "hot_temp_c": 78.0,
     "reverse_led_order": True,
     "parental_countdown_enabled": True,
-    "countdown_colour": "cyan",
+    "countdown_colour": "white",
     # 0 follows the timer's initial duration; otherwise this is fixed minutes.
     "countdown_full_bar_minutes": 0,
     "countdown_dark_edge_compensation": 2,
     "free_timer_minutes": 60,
-    # Beta feature is opt-in; preview buttons still work before enabling it.
-    "events_enabled": False,
+    "events_enabled": True,
     "event_notifications_enabled": True,
     "event_achievements_enabled": True,
     "event_screenshots_enabled": True,
     "event_recording_enabled": True,
     # Optional optical separation for the persistent red recording marker.
     "recording_marker_isolation": True,
-    "event_notification_variant": "notification-original",
-    "event_achievement_variant": "achievement-original",
-    "event_screenshot_variant": "screenshot-original",
-    "controller_battery_display": "off",
+    "event_notification_variant": "notification-beacon",
+    "event_achievement_variant": "achievement-rebound",
+    "event_screenshot_variant": "screenshot-bloom",
+    "controller_battery_display": "home",
+    # Charging choices are exclusive; legacy display/enabled keys are derived
+    # for compatibility with older local beta settings.
+    "controller_charging_mode": "continuous-home",
+    "controller_charging_display": "home",
     "controller_alert_context": "both",
     "controller_alerts_enabled": True,
     "controller_connect_enabled": True,
@@ -50,10 +54,15 @@ DEFAULTS = {
     "controller_charging_enabled": True,
     "controller_low_threshold": 20,
     "controller_connect_variant": "welcome",
-    "controller_persistent_variant": "clean",
+    "controller_persistent_variant": "tip",
     "controller_low_variant": "beacon",
-    "controller_charging_variant": "current",
-    "controller_duo_variant": "twin",
+    "controller_charging_variant": "breath",
+    "controller_duo_variant": "double-welcome",
+    "controller_colour_normal": [0, 180, 45],
+    "controller_colour_medium": [230, 110, 0],
+    "controller_colour_low": [220, 12, 24],
+    "controller_colour_charging": [0, 145, 220],
+    "controller_gauge_brightness": 65,
     "guard_cooldown_s": 5.0,
     "guard_stable_s": 2.0,
 }
@@ -105,6 +114,16 @@ class SettingsStore:
                     for key in DEFAULTS:
                         if key in raw:
                             self._data[key] = raw[key]
+                    if "controller_charging_mode" not in raw:
+                        display = raw.get("controller_charging_display")
+                        if display == "home":
+                            self._data["controller_charging_mode"] = "continuous-home"
+                        elif display == "everywhere":
+                            self._data["controller_charging_mode"] = "continuous-everywhere"
+                        else:
+                            self._data["controller_charging_mode"] = (
+                                "brief" if raw.get("controller_charging_enabled", True) else "off"
+                            )
             except (OSError, ValueError, TypeError):
                 pass
             self._validate()
@@ -131,6 +150,7 @@ class SettingsStore:
             self._data["temperature_palette"] = DEFAULTS["temperature_palette"]
         for key in (
             "temperature_custom_cool", "temperature_custom_middle", "temperature_custom_hot",
+            "controller_colour_normal", "controller_colour_medium", "controller_colour_low", "controller_colour_charging",
         ):
             value = self._data.get(key)
             if not isinstance(value, (list, tuple)) or len(value) != 3:
@@ -138,8 +158,23 @@ class SettingsStore:
                 continue
             try:
                 self._data[key] = [max(0, min(255, int(round(float(channel))))) for channel in value]
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):
                 self._data[key] = list(DEFAULTS[key])
+        try:
+            self._data["controller_gauge_brightness"] = max(10, min(100, int(self._data["controller_gauge_brightness"])))
+        except (TypeError, ValueError, OverflowError):
+            self._data["controller_gauge_brightness"] = DEFAULTS["controller_gauge_brightness"]
+        raw_display = self._data.get("display_profiles")
+        display = {}
+        if isinstance(raw_display, dict):
+            for raw_id, mode in list(raw_display.items())[:512]:
+                try:
+                    appid = int(raw_id)
+                except (TypeError, ValueError, OverflowError):
+                    continue
+                if 0 < appid <= 0xffffffff and isinstance(mode, str) and mode in {"artwork", "performance"}:
+                    display[str(appid)] = mode
+        self._data["display_profiles"] = display
         self._data["reverse_led_order"] = bool(self._data["reverse_led_order"])
         self._data["parental_countdown_enabled"] = bool(self._data["parental_countdown_enabled"])
         for key in (
@@ -155,6 +190,17 @@ class SettingsStore:
         if (not isinstance(self._data["controller_battery_display"], str)
                 or self._data["controller_battery_display"] not in {"off", "home", "everywhere"}):
             self._data["controller_battery_display"] = DEFAULTS["controller_battery_display"]
+        charging_mode = self._data["controller_charging_mode"]
+        if not isinstance(charging_mode, str) or charging_mode not in {
+            "off", "brief", "continuous-home", "continuous-everywhere"
+        }:
+            charging_mode = DEFAULTS["controller_charging_mode"]
+        self._data["controller_charging_mode"] = charging_mode
+        self._data["controller_charging_enabled"] = charging_mode == "brief"
+        self._data["controller_charging_display"] = {
+            "off": "off", "brief": "off", "continuous-home": "home",
+            "continuous-everywhere": "everywhere",
+        }[charging_mode]
         if (not isinstance(self._data["controller_alert_context"], str)
                 or self._data["controller_alert_context"] not in {"off", "home", "game", "both"}):
             self._data["controller_alert_context"] = DEFAULTS["controller_alert_context"]
@@ -236,6 +282,30 @@ class SettingsStore:
                 "source": profile.get("source", self._data["artwork_source"]),
                 "custom": bool(profile),
             }
+
+    def display_for(self, appid=0):
+        with self._lock:
+            override = self._data["display_profiles"].get(str(int(appid or 0)), "inherit")
+            default = self._data["mode"]
+            return {"default": default, "override": override,
+                    "mode": default if default == "disabled" or override == "inherit" else override}
+
+    def update_display(self, appid, mode):
+        appid = int(appid)
+        if not 0 < appid <= 0xffffffff or not isinstance(mode, str) or mode not in {"inherit", "artwork", "performance"}:
+            raise ValueError("A game AppID and Artwork, Performance or Inherit are required")
+        with self._lock:
+            profiles = dict(self._data["display_profiles"])
+            if mode == "inherit":
+                profiles.pop(str(appid), None)
+            else:
+                if str(appid) not in profiles and len(profiles) >= 512:
+                    raise ValueError("Display profile limit reached (512)")
+                profiles[str(appid)] = mode
+            self._data["display_profiles"] = profiles
+            self._validate()
+            self.save()
+            return self.display_for(appid)
 
     def update_artwork(self, appid, changes):
         with self._lock:

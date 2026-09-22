@@ -35,6 +35,10 @@ class Plugin:
         self.engine.update_settings({"mode": mode})
         return self.engine.status()
 
+    async def set_game_display(self, appid: int, mode: str):
+        self.engine.settings.update_display(appid, mode)
+        return self.engine.status()
+
     async def set_setting(self, key: str, value):
         self.engine.update_settings({key: value})
         return self.engine.status()
@@ -101,6 +105,10 @@ class Plugin:
 
     async def reset_controllers(self):
         self.engine.reset_controllers()
+        return True
+
+    async def report_controller_telemetry(self, state):
+        self.engine.report_controller_telemetry(state)
         return True
 
     async def preview_controller(self, kind: str, variant: str = ""):

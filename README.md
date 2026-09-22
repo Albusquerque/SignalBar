@@ -6,11 +6,21 @@ Make your Steam Machine's 17-pixel light bar useful and a little more
 expressive. Choose a persistent display, then let playtime warnings and short
 Steam moments take the stage before your display returns.
 
-[Download SignalBar v0.5.0 beta 2](https://github.com/Albusquerque/SignalBar/releases/download/v0.5.0-beta.2/SignalBar-v0.5.0-beta.2.zip)
+[Download SignalBar v0.5.0](https://github.com/Albusquerque/SignalBar/releases/tag/v0.5.0)
 
-This is a beta. The [stable v0.4.0 release](https://github.com/Albusquerque/SignalBar/releases/tag/v0.4.0)
-remains available while controller telemetry is tested on real Steam Machine
-hardware and different controllers.
+Version 0.5.0 adds controller battery signals and new controls for how they
+appear. A fresh installation starts with Performance, Playtime and Light events
+enabled, plus a controller gauge and charging animation on the Steam Home screen.
+Existing saved preferences are not replaced when upgrading.
+
+Choose a default display, then optionally save Artwork or Performance for each
+running game in the Decky panel. **Use default** removes that game's override.
+Returning Home uses the default again. **Disabled** always turns off SignalBar
+lighting, even when a game has its own profile.
+
+To review your choices in one place, open **Advanced / debug > Show debug
+details**. The configuration snapshot groups saved options from every tab and
+separates global Artwork defaults from the current game's settings.
 
 ## Your everyday display
 
@@ -36,6 +46,11 @@ Performance can be limited to game sessions or kept active on the Steam home
 screen. Three ready-made temperature palettes are included, and a native Decky
 colour picker lets you choose custom Cool, Middle, and Hot colours.
 
+CPU/GPU sensors are sampled every 0.5 seconds in every display mode. Opening
+Performance settings immediately shows fresh readings without first selecting
+Performance as the active display. Missing or expired readings are not retained
+as if they were live.
+
 ![Animated mirrored CPU and GPU meter with changing load percentages, temperatures and colours](assets/readme-gifs/performance.gif)
 
 ### Playtime Countdown
@@ -47,29 +62,49 @@ During the final eight seconds, three short white flashes repeat until zero.
 
 ![Animated playtime countdown](assets/readme-gifs/countdown.gif)
 
-### Controller battery (0.5.0 beta)
+### Controller battery
 
-Get a short welcome when a controller connects and a warning when its battery
-runs low. Charging can have its own brief signal. When a second controller
-connects, the bar can show both players; a permanent two-controller gauge uses
-eight LEDs per player with the centre LED off. There are three visual styles
-for each of these situations and for the single-controller gauge.
+Get a brief connection signal and a low-battery warning when Steam reports a
+controller. An optional permanent battery gauge can appear on Home or everywhere.
+With two known battery levels, it gives each controller eight mirrored LEDs,
+leaves the centre LED off and adds fixed white endpoints after the introduction.
+The two-controller preview holds those endpoints long enough to inspect them.
+Three visual styles are available for connection, low battery, charging and
+two-controller signals. The single-controller gauge also has three styles.
 
-The permanent gauge is optional: **Off**, **On Home**, or **Everywhere**. Brief
-alerts are a separate choice: **Off**, **On Home**, **In game**, or **Home + in
-game**. By default, the permanent gauge is off while alerts are allowed in both
-places. An alert briefly replaces the current display, then the live Artwork,
-Performance, or countdown frame returns. Low-battery alerts fire on a threshold
-crossing, not on every battery reading. The final five minutes of a countdown
-remain protected.
+Choose one charging behavior: **Off**, **Brief** (about three seconds when
+charging starts), **Continuous on Home**, or **Continuous everywhere**. Brief
+charging follows the separate brief-alert master switch and Home/in-game
+location. Continuous charging does not need brief alerts or the permanent
+gauge; it runs while Steam reports charging below 100%, then stops when charging
+ends. At 100% it shows a short completion cue. On a fresh installation, the
+permanent gauge and continuous charging both appear on Home only.
 
-![Controller connection, low-battery and two-controller light signals](assets/readme-gifs/controller-battery.gif)
+Connection and low-battery signals are brief alerts too. Their location can be
+set to Off, Home, in game, or both. Low-battery warnings fire on a threshold
+crossing or the first low reading, not every poll. Brief signals and charging
+animation can yield to higher-priority displays; the final five minutes of a
+countdown are protected.
 
-Battery data comes from Steam's controller callbacks. A controller that reports
-only a coarse battery level is labelled as such; SignalBar never invents an
-exact percentage. If there is no usable battery data, the gauge stays off.
-Controller support and callback payloads still need verification on physical
-hardware in this beta.
+![Controller connection, mirrored two-controller gauge, low-battery warning and charging motion](assets/readme-gifs/controller-battery.gif)
+
+Battery data comes from SteamUI's SteamInputManager service and controller state:
+a startup read, live notifications, and a two-second recovery poll. Live battery
+notifications take precedence over cached snapshots, so an older list cannot
+reset a real 41% reading to 100%. Unknown battery values are
+not displayed as zero. If there is no usable battery data, the gauge stays off.
+The Controllers panel distinguishes a service error from an empty controller
+list. A controller already present at startup does not replay its connection
+signal; a controller already charging does not trigger the brief charging cue.
+Disconnect and reconnect it to test a connection signal. Charging signals need
+both a reported charging state and a usable battery level.
+Charging support depends on the controller and connection type. See
+[controller research and test protocol](docs/CONTROLLERS_RESEARCH.md).
+
+Choose your own healthy, medium, low and charging/connection colours in
+**Controllers > Controller colours**. Controller-only brightness defaults to
+65% and can be adjusted from 10 to 100%. These settings apply to both players,
+brief controller animations and previews, without changing other light modes.
 
 ## Light events
 
@@ -126,7 +161,7 @@ SignalBar follows a strict order:
 ### Decky Loader
 
 1. Install [Decky Loader](https://decky.xyz/) and enable Developer Mode.
-2. Download `SignalBar-v0.5.0-beta.2.zip` from the prerelease. Do not extract it.
+2. Download `SignalBar-v0.5.0.zip` from the release linked above. Do not extract it.
 3. Open **Decky Settings > Developer > Install Plugin from ZIP**.
 4. Select the downloaded archive.
 5. Restart Decky Loader if SignalBar does not appear immediately.
@@ -145,10 +180,11 @@ light bar through root-owned `valve-leds` sysfs files.
 2. Choose **Artwork**, **Performance**, or **Disabled**.
 3. Open **Detailed settings** for Artwork, Performance, Playtime, Light events,
    Controllers, and Advanced options.
-4. Use Preview to try each animation before enabling live light events.
+4. Use Preview to compare animations before changing your live settings.
 
-Live Light events are disabled by default.
-Controller alerts have their own switch and work independently of Light events.
+Live Light events are enabled on a fresh installation. Controller alerts have
+their own switch and work independently of Light events. Saved settings from
+older versions are kept.
 
 ## Configuration
 
@@ -191,7 +227,8 @@ clears the old parental countdown immediately.
 
 - Permanent battery gauge: Off, On Home, or Everywhere
 - Brief alert contexts: Off, On Home, In game, or Home + in game
-- Connection, low-battery, and charging alerts can each be disabled
+- Connection and low-battery alerts can each be disabled; charging has its own
+  Off / Brief / Continuous on Home / Continuous everywhere choice
 - Adjustable low-battery threshold from 5% to 30%
 - Three selectable styles for each signal, including the two-controller view
 - Local preview buttons work without a connected controller or live alerts
@@ -231,9 +268,9 @@ own last verified write.
   change between Steam builds
 - Achievement animations follow Steam's achievement notification
 - Screenshot animations follow a newly written screenshot file
-- Controller battery reporting relies on private SteamClient callbacks and
-  varies by controller. This beta has automated coverage but not yet a verified
-  compatibility list for real Steam Machine hardware.
+- Controller battery reporting relies on the private SteamInputManager service
+  and varies by controller. There is no verified compatibility list for every
+  controller and connection type yet.
 - No Internet artwork fallback, audio visualizer, FPS, network, storage,
   Moonlight, or Sunshine provider yet
 
@@ -246,7 +283,7 @@ npm run build
 npm run package
 ```
 
-The installable archive is written to `out/SignalBar-v0.5.0-beta.2.zip`.
+The installable archive is written to `out/SignalBar-v0.5.0.zip`.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for provider, arbitration, guard, and
 hardware-rendering details. Release history is available in

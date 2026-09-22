@@ -53,6 +53,8 @@ class Engine:
             "parental_wait_started_at": 0.0,
             "controller_callback_source": "waiting",
             "controller_last_update_at": 0.0,
+            "controller_telemetry": {"phase": "starting", "hooks": 0, "queries": 0,
+                                     "events": 0, "raw_count": 0, "query_ms": None, "error": ""},
         }
 
     def _info(self, message):
@@ -240,6 +242,10 @@ class Engine:
             running = self._game.running
             self._runtime_debug["controller_callback_source"] = str(source or "Steam callback")[:48]
             self._runtime_debug["controller_last_update_at"] = time.monotonic()
+        countdown = self.countdown.status(allow_parental=values["parental_countdown_enabled"] and running)
+        if countdown["active"] and countdown["remaining_seconds"] <= 300:
+            # Keep receiving real state, but don't consume an unseen low warning.
+            values = {**values, "controller_alerts_enabled": False}
         if self.controllers.update(controllers, values, running) == "low":
             self.events.clear_transients()
 
@@ -248,6 +254,33 @@ class Engine:
         with self._lock:
             self._runtime_debug["controller_callback_source"] = "waiting"
             self._runtime_debug["controller_last_update_at"] = 0.0
+            self._runtime_debug["controller_telemetry"]["phase"] = "starting"
+
+    def report_controller_telemetry(self, state):
+        if not isinstance(state, dict):
+            return
+        phase = state.get("phase")
+        if phase not in {"starting", "ready", "unavailable", "error"}:
+            return
+        clean = {"phase": phase, "error": str(state.get("error") or "")[:180]}
+        for key in ("hooks", "queries", "events", "raw_count", "query_ms"):
+            value = state.get(key)
+            clean[key] = min(10000000, max(0, int(value))) if isinstance(value, (int, float)) and not isinstance(value, bool) and 0 <= value < float("inf") else (None if key == "query_ms" else 0)
+        clean["devices"] = []
+        devices = state.get("devices", [])
+        if isinstance(devices, list):
+            for device in devices[:8]:
+                if not isinstance(device, dict):
+                    continue
+                entry = {"name": str(device.get("name", "Controller"))[:64],
+                         "source": str(device.get("source", "unknown"))[:40]}
+                for key in ("index", "list_percent", "store_percent", "event_percent", "effective_percent", "event_age_s"):
+                    value = device.get(key)
+                    maximum = 0xffffffff if key == "index" else 100 if key.endswith("percent") else 10000000
+                    entry[key] = value if isinstance(value, (int, float)) and not isinstance(value, bool) and 0 <= value <= maximum else None
+                clean["devices"].append(entry)
+        with self._lock:
+            self._runtime_debug["controller_telemetry"] = clean
 
     def preview_controller(self, kind, variant=""):
         values = self.settings.all()
@@ -315,8 +348,15 @@ class Engine:
         interval = 0.10
         event_was_active = False
         event_preempted_valve = False
+        next_hardware_attempt = 0.0
         while not self._stop.is_set():
+            # Telemetry must not depend on LED ownership, hardware availability,
+            # the chosen display, or whether a Decky panel is open.
+            self.performance.refresh(self.settings.all()["performance_smoothing"])
             if hardware is None:
+                if time.monotonic() < next_hardware_attempt:
+                    self._stop.wait(0.1)
+                    continue
                 try:
                     hardware = self.hardware_factory()
                     values = self.settings.all()
@@ -333,8 +373,7 @@ class Engine:
                         self._available = False
                         self._error = str(error)
                         self._suspension_reason = "hardware unavailable; retrying"
-                    if self._stop.wait(2.0):
-                        break
+                    next_hardware_attempt = time.monotonic() + 2.0
                     continue
 
             if self._stop.wait(interval):
@@ -352,6 +391,7 @@ class Engine:
                     game = self._game
                     explicit = now < self._steam_active_until
                     explicit_reason = self._steam_reason
+                values["mode"] = self.settings.display_for(game.appid)["mode"]
                 signature = hardware.read_signature()
                 # A new native write during our animation ends that animation
                 # immediately; otherwise the two writers would fight each tick.
@@ -471,6 +511,8 @@ class Engine:
         sample = self.performance.sample
         art = self.artwork.status()
         with self._lock:
+            display = self.settings.display_for(self._game.appid)
+            values["mode"] = display["mode"]
             artwork_settings = self.settings.artwork_for(self._game.appid)
             countdown = self.countdown.status(
                 colour=values["countdown_colour"],
@@ -527,7 +569,7 @@ class Engine:
             )
             controller_status = self.controllers.status(values, self._game.running)
             return {
-                "version": "0.5.0-beta.1",
+                "version": "0.5.0",
                 "available": self._available,
                 "active": self._owner == "SignalBar",
                 "owner": self._owner,
@@ -535,6 +577,8 @@ class Engine:
                 "suspension_reason": self._suspension_reason,
                 "error": self._error,
                 "mode": values["mode"],
+                "default_mode": display["default"],
+                "display_override": display["override"],
                 "performance_metric": values["performance_metric"],
                 "performance_smoothing": values["performance_smoothing"],
                 "performance_always": values["performance_always"],
@@ -547,6 +591,9 @@ class Engine:
                 "artwork_manual_y": artwork_settings["manual_y"],
                 "artwork_source": artwork_settings["source"],
                 "artwork_custom": artwork_settings["custom"],
+                "artwork_default_mode": values["artwork_mode"],
+                "artwork_default_manual_y": values["artwork_manual_y"],
+                "artwork_default_source": values["artwork_source"],
                 "cool_temp_c": values["cool_temp_c"],
                 "hot_temp_c": values["hot_temp_c"],
                 "reverse_led_order": values["reverse_led_order"],
@@ -565,6 +612,8 @@ class Engine:
                 "event_achievement_variant": values["event_achievement_variant"],
                 "event_screenshot_variant": values["event_screenshot_variant"],
                 "controller_battery_display": values["controller_battery_display"],
+                "controller_charging_mode": values["controller_charging_mode"],
+                "controller_charging_display": values["controller_charging_display"],
                 "controller_alert_context": values["controller_alert_context"],
                 "controller_alerts_enabled": values["controller_alerts_enabled"],
                 "controller_connect_enabled": values["controller_connect_enabled"],
@@ -576,10 +625,17 @@ class Engine:
                 "controller_low_variant": values["controller_low_variant"],
                 "controller_charging_variant": values["controller_charging_variant"],
                 "controller_duo_variant": values["controller_duo_variant"],
+                "controller_colour_normal": values["controller_colour_normal"],
+                "controller_colour_medium": values["controller_colour_medium"],
+                "controller_colour_low": values["controller_colour_low"],
+                "controller_colour_charging": values["controller_colour_charging"],
+                "controller_gauge_brightness": values["controller_gauge_brightness"],
                 "controllers": controller_status,
                 "events": self.events.status(),
                 "game": {"appid": self._game.appid, "title": self._game.title},
                 "performance": {
+                    "sample_age_s": max(0.0, now - sample.sampled_at) if sample.sampled_at else None,
+                    "error": self.performance.error,
                     "gpu_load": sample.gpu_load,
                     "gpu_temperature": sample.gpu_temp_c,
                     "cpu_load": sample.cpu_load,

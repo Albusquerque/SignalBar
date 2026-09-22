@@ -1,8 +1,10 @@
 import { callable } from "@decky/api";
 import type { ArtworkPayload, Status } from "./types";
+import type { ControllerTelemetry } from "./controller_monitor";
 
 export const getStatus = callable<[], Status>("get_status");
 export const setMode = callable<[mode: string], Status>("set_mode");
+export const setGameDisplay = callable<[appid: number, mode: string], Status>("set_game_display");
 export const setSetting = callable<[key: string, value: unknown], Status>("set_setting");
 export const setArtworkSetting = callable<[appid: number, key: string, value: unknown], Status>("set_artwork_setting");
 export const gameChanged = callable<[appid: number, title: string], Status>("game_changed");
@@ -29,6 +31,7 @@ export const previewCountdown = callable<[], Status>("preview_countdown");
 export const triggerEvent = callable<[kind: string, preview: boolean, variant: string], boolean>("trigger_event");
 export const updateControllers = callable<[controllers: ControllerBatteryUpdate[], source: string], boolean>("update_controllers");
 export const resetControllers = callable<[], boolean>("reset_controllers");
+export const reportControllerTelemetry = callable<[state: ControllerTelemetry], boolean>("report_controller_telemetry");
 export const previewController = callable<[kind: string, variant: string], boolean>("preview_controller");
 
 export interface ControllerBatteryUpdate {

@@ -22,6 +22,7 @@ import {
   previewController,
   setArtworkSetting,
   setMode,
+  setGameDisplay,
   setSetting,
   startFreeTimer,
   stopFreeTimer,
@@ -30,9 +31,11 @@ import {
 } from "./api";
 import { sampleArtwork } from "./artwork";
 import { PalettePreview } from "./components/PalettePreview";
+import { CONTROLLER_VARIANTS } from "./controller_variants";
 import { EVENT_VARIANTS } from "./event_variants";
 import { hslStringToRgb, performancePreview, rgbToHsl } from "./performance";
 import { startSignalBarRuntime } from "./runtime";
+import { buildSettingsSnapshot } from "./settings_snapshot";
 import type { ArtworkPayload, ArtworkSource, Status } from "./types";
 
 const MODE_OPTIONS = [
@@ -104,34 +107,12 @@ const CONTROLLER_ALERT_OPTIONS = [
   { data: "game", label: "In game" },
   { data: "both", label: "Home + in game" },
 ];
-const CONTROLLER_VARIANTS = {
-  connect: [
-    { data: "welcome", label: "Welcome", detail: "Two waves greet the controller and reveal its charge." },
-    { data: "orbit", label: "Orbit", detail: "A light travels the bar before the battery appears." },
-    { data: "handshake", label: "Handshake", detail: "Two points meet at the centre and confirm the connection." },
-  ],
-  persistent: [
-    { data: "clean", label: "Clean fill", detail: "A steady, easy-to-read battery gauge." },
-    { data: "tip", label: "Bright tip", detail: "A white endpoint marks the remaining charge." },
-    { data: "horizon", label: "Soft horizon", detail: "A dimmer living-room gauge." },
-  ],
-  low: [
-    { data: "beacon", label: "Beacon", detail: "Two red edge calls, then the charge left." },
-    { data: "drain", label: "Drain", detail: "The red bar contracts to the remaining charge." },
-    { data: "heartbeat", label: "Heartbeat", detail: "A measured double pulse, then a steady warning." },
-  ],
-  charging: [
-    { data: "current", label: "Current", detail: "A white current moves through the filled gauge." },
-    { data: "breath", label: "Soft breath", detail: "A gentle brightness change while charging begins." },
-    { data: "spark", label: "Spark refill", detail: "One spark travels into the charge level." },
-  ],
-  duo: [
-    { data: "twin", label: "Twin gauge", detail: "Eight LEDs for each controller, centre LED off." },
-    { data: "focus", label: "Focus swap", detail: "Both gauges remain visible as emphasis alternates." },
-    { data: "double-welcome", label: "Double welcome", detail: "Both halves fill on connection, then show charge." },
-  ],
-} as const;
-
+const CONTROLLER_CHARGING_OPTIONS = [
+  { data: "off", label: "Off" },
+  { data: "brief", label: "Brief, about 3 seconds" },
+  { data: "continuous-home", label: "Continuous on Home" },
+  { data: "continuous-everywhere", label: "Continuous everywhere" },
+];
 function formatRemaining(seconds: number): string {
   const safe = Math.max(0, Math.ceil(seconds));
   const hours = Math.floor(safe / 3600);
@@ -192,7 +173,23 @@ function PerformanceReadout({ status }: { status: Status }) {
     <br />
     GPU {status.performance.gpu_load == null ? "Unavailable" : `${Math.round(status.performance.gpu_load)}%`}
     {" · "}{status.performance.gpu_temperature == null ? "Unavailable" : `${Math.round(status.performance.gpu_temperature)}°C`}
+    <div style={{ opacity: .65, marginTop: 4 }}>
+      {status.performance.error ? `Sensor read failed: ${status.performance.error}`
+        : status.performance.sample_age_s == null ? "Waiting for a fresh sensor reading…"
+        : `Live sensors · updated ${formatAge(status.performance.sample_age_s)}`}
+    </div>
   </div>;
+}
+
+function chooseSettingColor(key: string, label: string, color: [number, number, number], setStatus: (value: Status) => void) {
+  const [hue, saturation, lightness] = rgbToHsl(color);
+  let modal: ReturnType<typeof showModal> | undefined;
+  modal = showModal(<ColorPickerModal title={label} defaultH={hue} defaultS={saturation}
+    defaultL={lightness} defaultA={1} closeModal={() => modal?.Close()}
+    onConfirm={(value) => {
+      const nextColor = hslStringToRgb(value);
+      if (nextColor) void setSetting(key, nextColor).then(setStatus).catch(console.warn);
+    }} />);
 }
 
 function ColorChoice({ label, color, onClick }: {
@@ -359,7 +356,6 @@ function EventsPanel({ status, setStatus }: { status: Status; setStatus: (next: 
           <div style={{ width: "100%", fontSize: ".8em", opacity: .82 }}>
             {status.events.active ? `Playing: ${status.events.variant}` : "No event animation active"}
             {status.events.recording ? " · recording marker on" : ""}
-            {status.events.active ? <PalettePreview colors={status.events.colors} /> : null}
             <div style={{ marginTop: 5 }}>The final five minutes of a countdown are protected. New native LED writes interrupt animations.</div>
           </div>
         </PanelSectionRow>
@@ -423,15 +419,22 @@ function EventsPanel({ status, setStatus }: { status: Status; setStatus: (next: 
 }
 
 function ControllersPanel({ status, setStatus }: { status: Status; setStatus: (next: Status) => void }) {
+  const [previewMessage, setPreviewMessage] = useState("");
+  const telemetry = status.debug.controller_telemetry;
+  const stale = (status.debug.controller_last_update_age_s ?? 0) > 10;
   const preview = async (kind: keyof typeof CONTROLLER_VARIANTS, variant: string) => {
-    await previewController(kind, variant);
-    setStatus(await getStatus());
+    try {
+      const played = await previewController(kind, variant);
+      setPreviewMessage(played ? "Preview requested. It does not test controller detection; LED output still follows SignalBar priorities."
+        : "Preview unavailable in Disabled mode or during the final five minutes of a countdown.");
+      setStatus(await getStatus());
+    } catch { setPreviewMessage("Preview could not reach SignalBar. Check the Decky backend."); }
   };
   const groups = [
     ["connect", "Connection", "controller_connect_enabled", "controller_connect_variant"],
     ["persistent", "Permanent gauge", null, "controller_persistent_variant"],
     ["low", "Low battery", "controller_low_enabled", "controller_low_variant"],
-    ["charging", "Charging", "controller_charging_enabled", "controller_charging_variant"],
+    ["charging", "Charging style", null, "controller_charging_variant"],
     ["duo", "Two controllers", null, "controller_duo_variant"],
   ] as const;
   return <>
@@ -439,35 +442,78 @@ function ControllersPanel({ status, setStatus }: { status: Status; setStatus: (n
       <PanelSectionRow><div style={{ fontSize: ".8em", opacity: .8 }}>
         {status.controllers.controllers.length ? status.controllers.controllers.map((controller) =>
           `${controller.name}: ${controllerChargeLabel(controller)}${controller.charging ? " · charging" : ""}`).join(" · ")
-          : "No controller reported by Steam yet."}
+          : telemetry?.phase === "ready" && !stale ? "Steam responded: no controllers connected."
+          : telemetry?.phase === "starting" || !telemetry ? "Connecting to Steam controller service…"
+          : "Controller detection unavailable. See the connection details below."}
+        <div style={{ marginTop: 8 }}>
+          Steam connection: {stale ? "stale (last reading over 10 seconds ago)" : telemetry?.phase ?? "starting"}
+          {telemetry?.phase === "ready" ? ` · ${telemetry.hooks}/3 live hooks · checked every 2 s` : ""}
+        </div>
+        {telemetry?.error ? <div style={{ color: "#ffca86", marginTop: 6 }}>{telemetry.error}</div> : null}
+        {previewMessage ? <div style={{ marginTop: 6 }}>{previewMessage}</div> : null}
       </div></PanelSectionRow>
       <PanelSectionRow><DropdownItem label="Permanent battery gauge"
-        description="Off by default. On Home replaces the home display; Everywhere also replaces Artwork or Performance while a game runs. Countdown still wins."
+        description="Off by default. On Home can show it outside games; Everywhere can also show it in games. Countdowns and brief alerts take priority."
         rgOptions={CONTROLLER_DISPLAY_OPTIONS} selectedOption={status.controller_battery_display}
         onChange={async (option) => setStatus(await setSetting("controller_battery_display", String(option.data)))} /></PanelSectionRow>
       <PanelSectionRow><ToggleField label="Brief controller alerts"
-        description="Independent of the permanent gauge. Short signals restore the live display afterward."
+        description="Master switch for connection, low-battery and brief charging signals. It does not turn off the permanent gauge or continuous charging."
         checked={status.controller_alerts_enabled}
         onChange={async (value) => setStatus(await setSetting("controller_alerts_enabled", value))} /></PanelSectionRow>
-      <PanelSectionRow><DropdownItem label="Where alerts play" rgOptions={CONTROLLER_ALERT_OPTIONS}
+      <PanelSectionRow><DropdownItem label="Where brief alerts play"
+        description="Applies to connection, low-battery and brief charging signals, not continuous charging."
+        rgOptions={CONTROLLER_ALERT_OPTIONS}
         selectedOption={status.controller_alert_context}
         onChange={async (option) => setStatus(await setSetting("controller_alert_context", String(option.data)))} /></PanelSectionRow>
+      <PanelSectionRow><DropdownItem label="Charging behavior"
+        description="Choose one: a brief signal when charging starts, or movement while Steam reports charging below 100%. Continuous charging is independent of Brief controller alerts."
+        rgOptions={CONTROLLER_CHARGING_OPTIONS} selectedOption={status.controller_charging_mode}
+        onChange={async (option) => setStatus(await setSetting("controller_charging_mode", String(option.data)))} /></PanelSectionRow>
+      <PanelSectionRow><div style={{ fontSize: ".78em", opacity: .78 }}>
+        {status.controller_charging_mode === "brief"
+          ? "Brief charging needs Brief controller alerts enabled and a reported battery level. It follows Where brief alerts play and ends after about 3 seconds. A controller already charging at startup does not trigger it."
+          : status.controller_charging_mode.startsWith("continuous")
+            ? "Continuous charging needs a reported battery level. It ends if Steam stops reporting charging, or at 100% after a short completion cue. It can yield to higher-priority signals."
+            : "No charging signal. Connection and low-battery alerts can still play if enabled."}
+      </div></PanelSectionRow>
       <PanelSectionRow><SliderField label="Low battery warning" value={status.controller_low_threshold}
         min={5} max={30} step={5} showValue valueSuffix="%"
         onChange={async (value) => setStatus(await setSetting("controller_low_threshold", value))} /></PanelSectionRow>
       <PanelSectionRow><div style={{ width: "100%", fontSize: ".78em", opacity: .8 }}>
-        {status.controllers.active ? `Playing: ${status.controllers.kind} · ${status.controllers.variant}` : "No controller animation active"}
-        <div>Coarse Steam levels are labelled as levels, never invented percentages.</div>
+        {status.controllers.active ? `Playing: ${status.controllers.kind} · ${status.controllers.variant}`
+          : status.controllers.charging_active ? "Charging animation active" : "No controller animation active"}
+        <div>Battery and charging readings depend on what Steam exposes for this controller and connection. Unknown is not treated as empty. An already-connected controller does not replay the connection signal at startup. Disabled mode and Steam LED ownership can prevent output.</div>
       </div></PanelSectionRow>
       <PanelSectionRow><div style={{ fontSize: ".78em", opacity: .75 }}>
-        When a second controller connects, the two-controller animation uses the selected style. The centre LED stays off in the permanent two-controller gauge.
+        When two known battery levels are available, the gauges fill from opposite edges. The centre LED stays off; fixed white endpoints appear after the introduction.
       </div></PanelSectionRow>
+    </PanelSection>
+    <PanelSection title="Controller colours">
+      <PanelSectionRow><div style={{ fontSize: ".8em", opacity: .8 }}>
+        These colours tint controller gauges and signals, including previews. White highlights stay white.
+        Other SignalBar modes are unchanged. Lower brightness may reduce pale glow on the diffuser.
+      </div></PanelSectionRow>
+      <PanelSectionRow><SliderField label="Controller brightness" min={10} max={100} step={5}
+        showValue valueSuffix="%" value={status.controller_gauge_brightness}
+        onChange={async (value) => setStatus(await setSetting("controller_gauge_brightness", value))} /></PanelSectionRow>
+      {([
+        ["controller_colour_normal", `Healthy battery · above ${Math.max(35, status.controller_low_threshold + 5)}%`],
+        ["controller_colour_medium", "Medium battery"],
+        ["controller_colour_low", `Low battery · ${status.controller_low_threshold}% or less`],
+        ["controller_colour_charging", "Connection / charging colour"],
+      ] as const).map(([key, label]) => <PanelSectionRow key={key}>
+        <ColorChoice label={label} color={status[key]}
+          onClick={() => chooseSettingColor(key, label, status[key], setStatus)} />
+      </PanelSectionRow>)}
     </PanelSection>
     {groups.map(([kind, title, enabledKey, variantKey]) => {
       const selected = status[variantKey];
       const options = CONTROLLER_VARIANTS[kind];
       const detail = options.find((item) => item.data === selected)?.detail ?? "";
       return <PanelSection key={kind} title={title}>
+        {kind === "charging" ? <PanelSectionRow><div style={{ fontSize: ".78em", opacity: .78 }}>
+          This style is used for the brief signal or the repeating animation, depending on Charging behavior. Preview shows one cycle only.
+        </div></PanelSectionRow> : null}
         {enabledKey ? <PanelSectionRow><ToggleField label={`Show ${title.toLowerCase()}`}
           checked={status[enabledKey]}
           onChange={async (value) => setStatus(await setSetting(enabledKey, value))} /></PanelSectionRow> : null}
@@ -476,11 +522,11 @@ function ControllersPanel({ status, setStatus }: { status: Status; setStatus: (n
           onChange={async (option) => setStatus(await setSetting(variantKey, String(option.data)))} /></PanelSectionRow>
         <PanelSectionRow><div style={{ fontSize: ".8em", opacity: .78 }}>{detail}</div></PanelSectionRow>
         <PanelSectionRow><div style={{ width: "100%", fontSize: ".78em", opacity: .8 }}>
-          {status.controllers.active && status.controllers.kind === kind ? `Playing: ${status.controllers.variant}` : "Preview plays here"}
+          {status.controllers.active && status.controllers.kind === kind ? `Playing: ${status.controllers.variant}` : "No preview playing"}
           <PalettePreview colors={status.controllers.active && status.controllers.kind === kind ? status.controllers.colors : []} />
         </div></PanelSectionRow>
         <PanelSectionRow><ButtonItem label={`Preview ${title.toLowerCase()}`}
-          description="Works without a connected controller or enabled live alerts. Protected countdowns and Disabled mode still take priority."
+          description="Uses sample battery data; it does not verify Steam detection. Disabled mode, countdown priority and Steam ownership can prevent LED output."
           onClick={() => void preview(kind, selected).catch(console.warn)}>Play selected</ButtonItem></PanelSectionRow>
       </PanelSection>;
     })}
@@ -593,27 +639,14 @@ function Content({ page = "quick" }: { page?: Page }) {
     label: string,
     color: [number, number, number],
   ) => {
-    const [hue, saturation, lightness] = rgbToHsl(color);
-    let modal: ReturnType<typeof showModal> | undefined;
-    modal = showModal(<ColorPickerModal
-      title={label}
-      defaultH={hue}
-      defaultS={saturation}
-      defaultL={lightness}
-      defaultA={1}
-      closeModal={() => modal?.Close()}
-      onConfirm={(value) => {
-        const nextColor = hslStringToRgb(value);
-        if (nextColor) void setSetting(key, nextColor).then(setStatus).catch(console.warn);
-      }}
-    />);
+    chooseSettingColor(key, label, color, setStatus);
   };
   const artColors = status.artwork.colors;
   const currentArtwork = status.game.appid > 0 && heroRequestKey === `${status.game.appid}:${status.artwork_source}`
     && hero?.appid === status.game.appid && hero.found && hero.data_uri ? hero : null;
   const performanceColors = performancePreview(status);
   const baseShownColors = status.provider.startsWith("event:") ? status.events.colors
-    : status.provider.startsWith("controller:") || status.provider === "controller-battery" ? status.controllers.colors
+    : status.provider.startsWith("controller:") || status.provider.startsWith("controller-") ? status.controllers.colors
     : status.provider === "countdown" ? status.countdown.colors
       : status.provider.startsWith("artwork") ? artColors
         : status.provider.startsWith("performance") ? performanceColors : [];
@@ -622,6 +655,8 @@ function Content({ page = "quick" }: { page?: Page }) {
   const shownLabel = status.provider.startsWith("event:") ? status.events.variant
     : status.provider.startsWith("controller:") ? `Controller · ${status.controllers.variant}`
       : status.provider === "controller-battery" ? "Controller battery"
+      : status.provider === "controller-charging" ? "Controller charging"
+      : status.provider === "controller-charge-complete" ? "Controller fully charged"
     : status.provider === "countdown" ? status.countdown.label
       : status.provider === "valve" ? "Steam / another app"
         : status.provider === "none" ? "No SignalBar output" : status.provider;
@@ -644,12 +679,24 @@ function Content({ page = "quick" }: { page?: Page }) {
       {page === "quick" ? <PanelSection title="Mode">
         <PanelSectionRow>
           <DropdownItem
-            label="Display"
+            label="Default display"
+            description="Used on Home and by games without an override. Disabled turns off all SignalBar lighting, including game profiles."
             rgOptions={MODE_OPTIONS}
-            selectedOption={status.mode}
+            selectedOption={status.default_mode}
             onChange={async (option) => setStatus(await setMode(String(option.data)))}
           />
         </PanelSectionRow>
+        {status.game.appid > 0 ? <>
+          <PanelSectionRow><DropdownItem label="Display for this game"
+            description={`Saved for ${status.game.title || `AppID ${status.game.appid}`}. Does not change other games.`}
+            rgOptions={[{ data: "inherit", label: "Use default" }, { data: "artwork", label: "Artwork" }, { data: "performance", label: "Performance" }]}
+            selectedOption={status.display_override}
+            onChange={async (option) => setStatus(await setGameDisplay(status.game.appid, String(option.data)))} /></PanelSectionRow>
+          <PanelSectionRow><div style={{ fontSize: ".78em", opacity: .75 }}>
+            {status.default_mode === "disabled" ? "SignalBar is disabled. The saved game choice will apply when re-enabled."
+              : `Active display: ${status.mode === "performance" ? "Performance" : "Artwork"}${status.display_override === "inherit" ? " (default)" : " (game profile)"}. Countdowns and short alerts keep their usual priority.`}
+          </div></PanelSectionRow>
+        </> : <PanelSectionRow><div style={{ fontSize: ".78em", opacity: .75 }}>Launch a game to save its own Artwork or Performance choice.</div></PanelSectionRow>}
       </PanelSection> : null}
 
       {page === "quick" ? <PanelSection title="Now showing">
@@ -744,10 +791,13 @@ function Content({ page = "quick" }: { page?: Page }) {
       </PanelSection> : null}
 
       {page === "performance" ? <PanelSection title="Performance">
+        <PanelSectionRow><div style={{ fontSize: ".78em", opacity: .75 }}>
+          Sensors update every 0.5 seconds in all display modes. These settings do not switch the active display.
+        </div></PanelSectionRow>
         <PanelSectionRow>
           <ToggleField
             label="Always show Performance"
-            description="Keep the performance meter active on the Steam home screen as well as in games. SignalBar still yields while Steam or another application is actively changing the LEDs."
+            description="When Default display is Performance, also show it on Home. A game's Artwork override still wins in that game. Steam's active LED animations retain priority."
             checked={status.performance_always}
             onChange={async (value) => setStatus(await setSetting("performance_always", value))}
           />
@@ -879,6 +929,18 @@ function Content({ page = "quick" }: { page?: Page }) {
         {showDebug ? (
           <>
             <PanelSectionRow>
+              <div style={{ width: "100%", padding: "8px 10px", background: "rgba(0, 0, 0, .24)", borderRadius: 6, overflowWrap: "anywhere" }}>
+                <div style={{ fontSize: ".88em", fontWeight: 700 }}>Configuration snapshot</div>
+                <div style={{ fontSize: ".68em", opacity: .7, marginBottom: 6 }}>
+                  SignalBar {status.version} · saved choices, including inactive options · no device IDs
+                </div>
+                {buildSettingsSnapshot(status).map((section) => <div key={section.title} style={{ marginTop: 7 }}>
+                  <div style={{ fontSize: ".77em", fontWeight: 700, color: "#9ee8f4" }}>{section.title}</div>
+                  {section.lines.map((line, index) => <div key={index} style={{ fontSize: ".72em", lineHeight: 1.25 }}>{line}</div>)}
+                </div>)}
+              </div>
+            </PanelSectionRow>
+            <PanelSectionRow>
               <div style={{ width: "100%", fontSize: ".76em", opacity: 0.78, overflowWrap: "anywhere" }}>
                 <div>LED path: {status.debug.led_path}</div>
                 <div>Last LED write: {formatAge(status.debug.last_write_age_s)}</div>
@@ -910,6 +972,16 @@ function Content({ page = "quick" }: { page?: Page }) {
                     ? " · no reading yet"
                     : ` · ${formatAge(status.debug.controller_last_update_age_s)}`}
                 </div>
+                <div>
+                  SteamInputManager: {status.debug.controller_telemetry?.phase ?? "starting"}
+                  {` · hooks ${status.debug.controller_telemetry?.hooks ?? 0}/3 · queries ${status.debug.controller_telemetry?.queries ?? 0} · events ${status.debug.controller_telemetry?.events ?? 0}`}
+                  {` · devices ${status.debug.controller_telemetry?.raw_count ?? 0} · query ${status.debug.controller_telemetry?.query_ms ?? "?"} ms`}
+                </div>
+                {status.debug.controller_telemetry?.devices?.map((device) => <div key={device.index}>
+                  {device.name} · input {device.index}: list {device.list_percent ?? "?"}% / SteamUI {device.store_percent ?? "?"}% / event {device.event_percent ?? "?"}%
+                  {` → ${device.effective_percent ?? "?"}% · ${device.source}`}
+                  {device.event_age_s != null ? ` (${formatAge(device.event_age_s)})` : ""}
+                </div>)}
               </div>
             </PanelSectionRow>
             <PanelSectionRow>

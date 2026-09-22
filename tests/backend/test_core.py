@@ -97,7 +97,7 @@ class CoreTests(unittest.TestCase):
         self.assertNotEqual(compensated[-1], (0, 0, 0))
 
     def test_performance_provider_applies_physical_compensation_only_to_output(self):
-        provider = PerformanceProvider()
+        provider = PerformanceProvider(clock=ManualClock(1))
         provider._last = PerformanceSample(
             gpu_load=70, gpu_temp_c=60, cpu_load=50, cpu_temp_c=60,
             sampled_at=1,
@@ -355,6 +355,50 @@ class CoreTests(unittest.TestCase):
 
 
 class PersistenceTests(unittest.TestCase):
+    def test_v050_fresh_install_defaults_match_approved_configuration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory) / "config.json")
+            store = SettingsStore(path)
+            expected = {
+                "mode": "performance", "performance_metric": "mixed",
+                "performance_smoothing": "balanced", "performance_always": True,
+                "mixed_direction": "mirrored", "temperature_palette": "classic",
+                "cool_temp_c": 45.0, "hot_temp_c": 78.0,
+                "artwork_source": "hero", "artwork_mode": "auto", "artwork_manual_y": .34,
+                "parental_countdown_enabled": True, "countdown_colour": "white",
+                "countdown_full_bar_minutes": 0, "free_timer_minutes": 60,
+                "events_enabled": True, "event_notifications_enabled": True,
+                "event_achievements_enabled": True, "event_screenshots_enabled": True,
+                "event_recording_enabled": True, "recording_marker_isolation": True,
+                "event_notification_variant": "notification-beacon",
+                "event_achievement_variant": "achievement-rebound",
+                "event_screenshot_variant": "screenshot-bloom",
+                "controller_battery_display": "home", "controller_alerts_enabled": True,
+                "controller_alert_context": "both", "controller_charging_mode": "continuous-home",
+                "controller_low_threshold": 20, "controller_connect_enabled": True,
+                "controller_low_enabled": True, "controller_connect_variant": "welcome",
+                "controller_persistent_variant": "tip", "controller_low_variant": "beacon",
+                "controller_charging_variant": "breath", "controller_duo_variant": "double-welcome",
+                "controller_gauge_brightness": 65,
+                "reverse_led_order": True, "countdown_dark_edge_compensation": 2,
+            }
+            for key, value in expected.items():
+                self.assertEqual(store.all()[key], value, key)
+            for key, color in {
+                "temperature_custom_cool": [30, 180, 230],
+                "temperature_custom_middle": [245, 180, 45],
+                "temperature_custom_hot": [235, 45, 55],
+                "controller_colour_normal": [0, 180, 45],
+                "controller_colour_medium": [230, 110, 0],
+                "controller_colour_low": [220, 12, 24],
+                "controller_colour_charging": [0, 145, 220],
+            }.items():
+                self.assertEqual(store.all()[key], color, key)
+            store.update({"mode": "artwork", "controller_battery_display": "off"})
+            upgraded = SettingsStore(path).all()
+            self.assertEqual(upgraded["mode"], "artwork")
+            self.assertEqual(upgraded["controller_battery_display"], "off")
+
     def test_engine_accepts_parental_and_free_countdowns(self):
         with tempfile.TemporaryDirectory() as directory:
             clock = ManualClock(100)
@@ -431,7 +475,7 @@ class PersistenceTests(unittest.TestCase):
             self.assertEqual(loaded["mode"], "artwork")
             self.assertEqual(loaded["artwork_manual_y"], 0.90)
             self.assertEqual(loaded["performance_smoothing"], "balanced")
-            self.assertFalse(loaded["performance_always"])
+            self.assertTrue(loaded["performance_always"])
             self.assertEqual(json.loads(Path(path).read_text())["mode"], "artwork")
 
             store.update({"performance_smoothing": "invalid"})
