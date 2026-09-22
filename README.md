@@ -6,7 +6,7 @@ Make your Steam Machine's 17-pixel light bar useful and a little more
 expressive. Choose a persistent display, then let playtime warnings and short
 Steam moments take the stage before your display returns.
 
-[Download SignalBar v0.5.0 beta 1](https://github.com/Albusquerque/SignalBar/releases/download/v0.5.0-beta.1/SignalBar-v0.5.0-beta.1.zip)
+[Download SignalBar v0.5.0 beta 2](https://github.com/Albusquerque/SignalBar/releases/download/v0.5.0-beta.2/SignalBar-v0.5.0-beta.2.zip)
 
 This is a beta. The [stable v0.4.0 release](https://github.com/Albusquerque/SignalBar/releases/tag/v0.4.0)
 remains available while controller telemetry is tested on real Steam Machine
@@ -126,7 +126,7 @@ SignalBar follows a strict order:
 ### Decky Loader
 
 1. Install [Decky Loader](https://decky.xyz/) and enable Developer Mode.
-2. Download `SignalBar-v0.5.0-beta.1.zip` from the prerelease. Do not extract it.
+2. Download `SignalBar-v0.5.0-beta.2.zip` from the prerelease. Do not extract it.
 3. Open **Decky Settings > Developer > Install Plugin from ZIP**.
 4. Select the downloaded archive.
 5. Restart Decky Loader if SignalBar does not appear immediately.
@@ -246,7 +246,7 @@ npm run build
 npm run package
 ```
 
-The installable archive is written to `out/SignalBar-v0.5.0-beta.1.zip`.
+The installable archive is written to `out/SignalBar-v0.5.0-beta.2.zip`.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for provider, arbitration, guard, and
 hardware-rendering details. Release history is available in

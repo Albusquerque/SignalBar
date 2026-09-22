@@ -13,7 +13,7 @@ import {
 } from "./api";
 import type { ControllerBatteryUpdate } from "./api";
 import { sampleArtwork } from "./artwork";
-import { batteryChange, controllerList } from "./controller_battery";
+import { batteryLevelList, controllerList, mergeOrderedBatteryLevels } from "./controller_battery";
 import { normalizeAppId } from "./steam_app_id";
 import { classifySteamNotification, screenshotWasCaptured } from "./steam_events";
 import type { LightEvent } from "./steam_events";
@@ -63,8 +63,9 @@ class SignalBarRuntime {
   private screenshotRegistration: Registration;
   private controllerListRegistration: Registration;
   private controllerBatteryRegistration: Registration;
-  private controllerStateRegistration: Registration;
   private controllers = new Map<string, ControllerBatteryUpdate>();
+  private controllerOrder: string[] = [];
+  private pendingBatteryLevels: (number | null)[] | null = null;
   private controllerFlushTimer: number | undefined;
   private controllerSync: Promise<unknown> = Promise.resolve();
   private controllerLastSource = "startup";
@@ -91,8 +92,9 @@ class SignalBarRuntime {
     this.screenshotRegistration?.unregister?.();
     this.controllerListRegistration?.unregister?.();
     this.controllerBatteryRegistration?.unregister?.();
-    this.controllerStateRegistration?.unregister?.();
     this.controllers.clear();
+    this.controllerOrder = [];
+    this.pendingBatteryLevels = null;
     this.controllerSync = this.controllerSync.then(() => resetControllers()).catch(() => undefined);
     void setSteamActivity(false, "").catch(() => undefined);
     console.log("[SignalBar] background runtime stopped");
@@ -299,21 +301,20 @@ class SignalBarRuntime {
     }, 120);
   }
 
-  private mergeControllerBattery(args: unknown[], source: string) {
-    const change = batteryChange(args);
-    if (!change) return;
-    const id = `steam:${change.index}`;
-    const previous = this.controllers.get(id);
-    if (!previous && change.percent == null && change.level == null && change.charging == null) return;
-    const next: ControllerBatteryUpdate = {
-      id,
-      name: previous?.name ?? `Controller ${change.index + 1}`,
-      percent: change.percent ?? previous?.percent ?? null,
-      level: change.level ?? previous?.level ?? null,
-      charging: change.charging ?? previous?.charging ?? null,
-    };
-    if (previous?.percent === next.percent && previous?.level === next.level && previous?.charging === next.charging) return;
-    this.controllers.set(id, next);
+  private applyControllerBatteryLevels(levels: (number | null)[], source: string) {
+    if (!this.controllerOrder.length) {
+      // Steam can deliver the battery snapshot before its initial controller
+      // list. Retain it and apply it as soon as the matching order is known.
+      this.pendingBatteryLevels = levels;
+      return;
+    }
+    const ordered = this.controllerOrder
+      .map((id) => this.controllers.get(id))
+      .filter((item): item is ControllerBatteryUpdate => Boolean(item));
+    const merged = mergeOrderedBatteryLevels(ordered, levels);
+    merged.forEach((item) => this.controllers.set(item.id, item));
+    // Forward even an unchanged snapshot so Advanced / debug proves that the
+    // Steam callback is alive on the user's exact Steam build.
     this.scheduleControllerSync(source);
   }
 
@@ -332,27 +333,25 @@ class SignalBarRuntime {
             charging: item.charging ?? old?.charging ?? null,
           }];
         }));
+        this.controllerOrder = list.map((item) => item.id);
+        if (this.pendingBatteryLevels) {
+          const pending = this.pendingBatteryLevels;
+          this.pendingBatteryLevels = null;
+          this.applyControllerBatteryLevels(pending, "Steam battery callback (deferred)");
+        }
         this.scheduleControllerSync("Steam controller list");
       });
     } catch (error) {
       console.warn("[SignalBar] Steam controller list hook unavailable", error);
     }
     try {
-      this.controllerBatteryRegistration = SteamClient?.Input?.RegisterForControllerBatteryChanges?.((...args: unknown[]) => {
-        if (this.alive) this.mergeControllerBattery(args, "Steam battery callback");
+      this.controllerBatteryRegistration = SteamClient?.Input?.RegisterForControllerBatteryChanges?.((raw: unknown) => {
+        if (!this.alive) return;
+        const levels = batteryLevelList(raw);
+        if (levels) this.applyControllerBatteryLevels(levels, "Steam battery callback");
       });
     } catch (error) {
       console.warn("[SignalBar] Steam controller battery hook unavailable", error);
-    }
-    try {
-      // Some Steam builds expose battery in state changes but not in the
-      // battery callback. Only changed battery values are forwarded.
-      this.controllerStateRegistration = SteamClient?.Input?.RegisterForControllerStateChanges?.((changes: unknown) => {
-        if (!this.alive || !Array.isArray(changes)) return;
-        for (const change of changes) this.mergeControllerBattery([change], "Steam controller state");
-      });
-    } catch (error) {
-      console.warn("[SignalBar] Steam controller state hook unavailable", error);
     }
   }
 }

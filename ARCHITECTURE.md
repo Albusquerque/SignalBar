@@ -44,12 +44,13 @@ event kind to the backend, never notification contents.
 
 ## Controller battery flow
 
-The Decky runtime subscribes to Steam controller-list, battery and state-change
-callbacks. It identifies controllers by Steam's session controller index,
-coalesces unchanged battery readings, and serializes snapshots before sending
-them to the backend. The first inventory snapshot is a baseline, not a fake
-connection alert. The backend validates at most eight entries and never
-converts an unknown or coarse battery reading to a displayed exact percentage.
+The Decky runtime subscribes to Steam controller-list and battery callbacks.
+Steam sends battery percentages as an ordered array aligned with the latest
+controller list, so the runtime retains that order and serializes snapshots
+before sending them to the backend. A battery snapshot received before the
+initial list is deferred rather than discarded. The first inventory snapshot
+is a baseline, not a fake connection alert. The backend validates at most eight
+entries and never converts an unknown or coarse battery reading to a displayed exact percentage.
 Coarse one-to-four levels can still drive a labelled approximate gauge; the
 lowest level can trigger a warning. Exact percentages use a configurable
 low-battery threshold with hysteresis to avoid repeated alerts.

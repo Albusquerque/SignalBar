@@ -21,7 +21,7 @@ export function batteryPercent(value: unknown): number | null {
   if (!item) return null;
   // Steam's callback payload is not typed by Decky. Only explicitly named
   // percentages or plausibly percentage-scale state values are displayed.
-  for (const key of ["nBatteryPercentage", "nBatteryPercent", "batteryPercent", "battery_percent", "percent", "nChargePercent"]) {
+  for (const key of ["nBatteryPercentage", "nBatteryPercent", "batteryPercent", "battery_percent", "percent", "nChargePercent", "ucBatteryLevel"]) {
     const candidate = numeric(item[key]);
     if (candidate != null && candidate >= 0 && candidate <= 100) return Math.round(candidate);
   }
@@ -33,6 +33,33 @@ export function batteryPercent(value: unknown): number | null {
     if (candidate != null && candidate >= 5 && candidate <= 100) return Math.round(candidate);
   }
   return null;
+}
+
+/**
+ * SteamUI's controller-battery callback returns an array whose positions match
+ * the most recent controller-list callback. It does not return an index/value
+ * pair. Keep this parser separate from batteryChange so a single payload cannot
+ * accidentally be interpreted as a controller state object.
+ */
+export function batteryLevelList(value: unknown): (number | null)[] | null {
+  if (!Array.isArray(value)) return null;
+  return value.map((entry) => {
+    const direct = numeric(entry);
+    if (direct != null) return direct >= 0 && direct <= 100 ? Math.round(direct) : null;
+    return batteryPercent(entry);
+  });
+}
+
+export function mergeOrderedBatteryLevels(
+  controllers: ControllerBatteryUpdate[],
+  levels: (number | null)[],
+): ControllerBatteryUpdate[] {
+  return controllers.map((controller, position) => {
+    const percent = levels[position];
+    return percent == null || controller.percent === percent
+      ? controller
+      : { ...controller, percent, level: null };
+  });
 }
 
 export function batteryLevel(value: unknown): number | null {

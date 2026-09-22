@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.0-beta.2 - 2026-09-22
+
+- Fix live controller telemetry on SteamOS. Steam sends controller battery
+  levels as an ordered array matching the latest controller-list callback;
+  beta.1 incorrectly expected an index/value pair and discarded the update.
+- Read SteamUI's `ucBatteryLevel` percentage field when it is already present
+  on a controller-list item.
+- Preserve battery snapshots that arrive before the initial controller list and
+  apply them as soon as that list establishes the correct ordering.
+- Forward unchanged battery callbacks to Advanced / debug so the callback
+  source and age can confirm that Steam is delivering telemetry.
+- Stop registering the high-frequency controller-state callback. It is intended
+  for live input/calibration data and is unnecessary for battery monitoring.
+
 ## 0.5.0-beta.1 - 2026-09-22
 
 - Add experimental Steam controller battery signals: connection, low battery,
