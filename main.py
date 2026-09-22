@@ -94,3 +94,14 @@ class Plugin:
 
     async def trigger_event(self, kind: str, preview: bool = False, variant: str = ""):
         return self.engine.trigger_event(kind, preview, variant)
+
+    async def update_controllers(self, controllers, source: str = "Steam callback"):
+        self.engine.update_controllers(controllers, source)
+        return True
+
+    async def reset_controllers(self):
+        self.engine.reset_controllers()
+        return True
+
+    async def preview_controller(self, kind: str, variant: str = ""):
+        return self.engine.preview_controller(kind, variant)

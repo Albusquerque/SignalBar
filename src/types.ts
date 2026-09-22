@@ -46,6 +46,26 @@ export interface Status {
   event_notification_variant: string;
   event_achievement_variant: string;
   event_screenshot_variant: string;
+  controller_battery_display: "off" | "home" | "everywhere";
+  controller_alert_context: "off" | "home" | "game" | "both";
+  controller_alerts_enabled: boolean;
+  controller_connect_enabled: boolean;
+  controller_low_enabled: boolean;
+  controller_charging_enabled: boolean;
+  controller_low_threshold: number;
+  controller_connect_variant: string;
+  controller_persistent_variant: string;
+  controller_low_variant: string;
+  controller_charging_variant: string;
+  controller_duo_variant: string;
+  controllers: {
+    controllers: { id: string; name: string; percent: number | null; level: number | null; charging: boolean | null }[];
+    active: boolean;
+    kind: string;
+    variant: string;
+    colors: RGB[];
+    persistent_available: boolean;
+  };
   events: {
     active: boolean;
     kind: string;
@@ -94,6 +114,8 @@ export interface Status {
     parental_callback_state: "idle" | "disabled" | "waiting" | "received";
     parental_callback_delay_ms: number | null;
     parental_wait_s: number | null;
+    controller_callback_source: string;
+    controller_last_update_age_s: number | null;
   };
 }
 

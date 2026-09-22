@@ -6,7 +6,11 @@ Make your Steam Machine's 17-pixel light bar useful and a little more
 expressive. Choose a persistent display, then let playtime warnings and short
 Steam moments take the stage before your display returns.
 
-[Download SignalBar v0.4.0](https://github.com/Albusquerque/SignalBar/releases/download/v0.4.0/SignalBar-v0.4.0.zip)
+[Download SignalBar v0.5.0 beta 1](https://github.com/Albusquerque/SignalBar/releases/download/v0.5.0-beta.1/SignalBar-v0.5.0-beta.1.zip)
+
+This is a beta. The [stable v0.4.0 release](https://github.com/Albusquerque/SignalBar/releases/tag/v0.4.0)
+remains available while controller telemetry is tested on real Steam Machine
+hardware and different controllers.
 
 ## Your everyday display
 
@@ -32,7 +36,7 @@ Performance can be limited to game sessions or kept active on the Steam home
 screen. Three ready-made temperature palettes are included, and a native Decky
 colour picker lets you choose custom Cool, Middle, and Hot colours.
 
-![Animated mixed CPU and GPU meter](assets/readme-gifs/performance.gif)
+![Animated mirrored CPU and GPU meter with changing load percentages, temperatures and colours](assets/readme-gifs/performance.gif)
 
 ### Playtime Countdown
 
@@ -42,6 +46,30 @@ from right to left, turns amber below 15 minutes, and turns red below five.
 During the final eight seconds, three short white flashes repeat until zero.
 
 ![Animated playtime countdown](assets/readme-gifs/countdown.gif)
+
+### Controller battery (0.5.0 beta)
+
+Get a short welcome when a controller connects and a warning when its battery
+runs low. Charging can have its own brief signal. When a second controller
+connects, the bar can show both players; a permanent two-controller gauge uses
+eight LEDs per player with the centre LED off. There are three visual styles
+for each of these situations and for the single-controller gauge.
+
+The permanent gauge is optional: **Off**, **On Home**, or **Everywhere**. Brief
+alerts are a separate choice: **Off**, **On Home**, **In game**, or **Home + in
+game**. By default, the permanent gauge is off while alerts are allowed in both
+places. An alert briefly replaces the current display, then the live Artwork,
+Performance, or countdown frame returns. Low-battery alerts fire on a threshold
+crossing, not on every battery reading. The final five minutes of a countdown
+remain protected.
+
+![Controller connection, low-battery and two-controller light signals](assets/readme-gifs/controller-battery.gif)
+
+Battery data comes from Steam's controller callbacks. A controller that reports
+only a coarse battery level is labelled as such; SignalBar never invents an
+exact percentage. If there is no usable battery data, the gauge stays off.
+Controller support and callback payloads still need verification on physical
+hardware in this beta.
 
 ## Light events
 
@@ -87,15 +115,18 @@ SignalBar follows a strict order:
 3. The final five minutes of a countdown are protected from light events.
 4. Short light events and manual previews temporarily replace non-critical
    displays.
-5. Steam Families and personal countdowns replace the selected base display.
-6. Artwork or Performance provides the normal persistent display.
+5. Low-battery alerts can interrupt other short events; connection and charging
+   alerts do not interrupt an active Steam light event.
+6. Steam Families and personal countdowns replace the selected base display.
+7. The optional controller gauge replaces the base display in its selected
+   context; otherwise Artwork or Performance provides it.
 
 ## Install
 
 ### Decky Loader
 
 1. Install [Decky Loader](https://decky.xyz/) and enable Developer Mode.
-2. Download `SignalBar-v0.4.0.zip` from the GitHub release. Do not extract it.
+2. Download `SignalBar-v0.5.0-beta.1.zip` from the prerelease. Do not extract it.
 3. Open **Decky Settings > Developer > Install Plugin from ZIP**.
 4. Select the downloaded archive.
 5. Restart Decky Loader if SignalBar does not appear immediately.
@@ -113,10 +144,11 @@ light bar through root-owned `valve-leds` sysfs files.
 1. Open SignalBar in Decky's quick-access menu.
 2. Choose **Artwork**, **Performance**, or **Disabled**.
 3. Open **Detailed settings** for Artwork, Performance, Playtime, Light events,
-   and Advanced options.
+   Controllers, and Advanced options.
 4. Use Preview to try each animation before enabling live light events.
 
 Live Light events are disabled by default.
+Controller alerts have their own switch and work independently of Light events.
 
 ## Configuration
 
@@ -155,6 +187,19 @@ palette is blended continuously between them.
 Steam Families only appears while a game is running. Closing or switching games
 clears the old parental countdown immediately.
 
+### Controllers
+
+- Permanent battery gauge: Off, On Home, or Everywhere
+- Brief alert contexts: Off, On Home, In game, or Home + in game
+- Connection, low-battery, and charging alerts can each be disabled
+- Adjustable low-battery threshold from 5% to 30%
+- Three selectable styles for each signal, including the two-controller view
+- Local preview buttons work without a connected controller or live alerts
+
+The gauge takes the place of Artwork or Performance where selected; it does
+not combine their colours. A Steam Families countdown still wins. Unknown or
+coarse battery data is not displayed as an exact percentage.
+
 ### Optical calibration
 
 The physical diffuser can make a lit LED bleed into a neighbouring dark space.
@@ -186,8 +231,11 @@ own last verified write.
   change between Steam builds
 - Achievement animations follow Steam's achievement notification
 - Screenshot animations follow a newly written screenshot file
-- No Internet artwork fallback, audio visualizer, FPS, network, controller,
-  storage, Moonlight, or Sunshine provider yet
+- Controller battery reporting relies on private SteamClient callbacks and
+  varies by controller. This beta has automated coverage but not yet a verified
+  compatibility list for real Steam Machine hardware.
+- No Internet artwork fallback, audio visualizer, FPS, network, storage,
+  Moonlight, or Sunshine provider yet
 
 ## Build and test
 
@@ -198,7 +246,7 @@ npm run build
 npm run package
 ```
 
-The installable archive is written to `out/SignalBar-v0.4.0.zip`.
+The installable archive is written to `out/SignalBar-v0.5.0-beta.1.zip`.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for provider, arbitration, guard, and
 hardware-rendering details. Release history is available in

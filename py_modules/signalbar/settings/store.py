@@ -42,6 +42,18 @@ DEFAULTS = {
     "event_notification_variant": "notification-original",
     "event_achievement_variant": "achievement-original",
     "event_screenshot_variant": "screenshot-original",
+    "controller_battery_display": "off",
+    "controller_alert_context": "both",
+    "controller_alerts_enabled": True,
+    "controller_connect_enabled": True,
+    "controller_low_enabled": True,
+    "controller_charging_enabled": True,
+    "controller_low_threshold": 20,
+    "controller_connect_variant": "welcome",
+    "controller_persistent_variant": "clean",
+    "controller_low_variant": "beacon",
+    "controller_charging_variant": "current",
+    "controller_duo_variant": "twin",
     "guard_cooldown_s": 5.0,
     "guard_stable_s": 2.0,
 }
@@ -67,6 +79,13 @@ EVENT_VARIANTS = {
         "screenshot-original", "screenshot-double", "screenshot-scan",
         "screenshot-bloom", "screenshot-ripple",
     },
+}
+CONTROLLER_VARIANTS = {
+    "controller_connect_variant": {"welcome", "orbit", "handshake"},
+    "controller_persistent_variant": {"clean", "tip", "horizon"},
+    "controller_low_variant": {"beacon", "drain", "heartbeat"},
+    "controller_charging_variant": {"current", "breath", "spark"},
+    "controller_duo_variant": {"twin", "focus", "double-welcome"},
 }
 
 
@@ -126,11 +145,27 @@ class SettingsStore:
         for key in (
             "events_enabled", "event_notifications_enabled", "event_achievements_enabled",
             "event_screenshots_enabled", "event_recording_enabled", "recording_marker_isolation",
+            "controller_alerts_enabled", "controller_connect_enabled", "controller_low_enabled",
+            "controller_charging_enabled",
         ):
             self._data[key] = bool(self._data[key])
         for key, choices in EVENT_VARIANTS.items():
             if not isinstance(self._data[key], str) or self._data[key] not in choices:
                 self._data[key] = DEFAULTS[key]
+        if (not isinstance(self._data["controller_battery_display"], str)
+                or self._data["controller_battery_display"] not in {"off", "home", "everywhere"}):
+            self._data["controller_battery_display"] = DEFAULTS["controller_battery_display"]
+        if (not isinstance(self._data["controller_alert_context"], str)
+                or self._data["controller_alert_context"] not in {"off", "home", "game", "both"}):
+            self._data["controller_alert_context"] = DEFAULTS["controller_alert_context"]
+        for key, choices in CONTROLLER_VARIANTS.items():
+            if not isinstance(self._data[key], str) or self._data[key] not in choices:
+                self._data[key] = DEFAULTS[key]
+        try:
+            threshold = int(round(float(self._data["controller_low_threshold"])))
+            self._data["controller_low_threshold"] = max(5, min(30, threshold))
+        except (TypeError, ValueError):
+            self._data["controller_low_threshold"] = DEFAULTS["controller_low_threshold"]
         if self._data["countdown_colour"] not in VALID_COUNTDOWN_COLOURS:
             self._data["countdown_colour"] = DEFAULTS["countdown_colour"]
         try:

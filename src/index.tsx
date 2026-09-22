@@ -19,6 +19,7 @@ import {
   getArtwork,
   getStatus,
   previewCountdown,
+  previewController,
   setArtworkSetting,
   setMode,
   setSetting,
@@ -92,6 +93,45 @@ const COUNTDOWN_SCALE_OPTIONS = [
   { data: 240, label: "Full bar = 4 hours" },
 ];
 
+const CONTROLLER_DISPLAY_OPTIONS = [
+  { data: "off", label: "Off" },
+  { data: "home", label: "On Home" },
+  { data: "everywhere", label: "Everywhere" },
+];
+const CONTROLLER_ALERT_OPTIONS = [
+  { data: "off", label: "Off" },
+  { data: "home", label: "On Home" },
+  { data: "game", label: "In game" },
+  { data: "both", label: "Home + in game" },
+];
+const CONTROLLER_VARIANTS = {
+  connect: [
+    { data: "welcome", label: "Welcome", detail: "Two waves greet the controller and reveal its charge." },
+    { data: "orbit", label: "Orbit", detail: "A light travels the bar before the battery appears." },
+    { data: "handshake", label: "Handshake", detail: "Two points meet at the centre and confirm the connection." },
+  ],
+  persistent: [
+    { data: "clean", label: "Clean fill", detail: "A steady, easy-to-read battery gauge." },
+    { data: "tip", label: "Bright tip", detail: "A white endpoint marks the remaining charge." },
+    { data: "horizon", label: "Soft horizon", detail: "A dimmer living-room gauge." },
+  ],
+  low: [
+    { data: "beacon", label: "Beacon", detail: "Two red edge calls, then the charge left." },
+    { data: "drain", label: "Drain", detail: "The red bar contracts to the remaining charge." },
+    { data: "heartbeat", label: "Heartbeat", detail: "A measured double pulse, then a steady warning." },
+  ],
+  charging: [
+    { data: "current", label: "Current", detail: "A white current moves through the filled gauge." },
+    { data: "breath", label: "Soft breath", detail: "A gentle brightness change while charging begins." },
+    { data: "spark", label: "Spark refill", detail: "One spark travels into the charge level." },
+  ],
+  duo: [
+    { data: "twin", label: "Twin gauge", detail: "Eight LEDs for each controller, centre LED off." },
+    { data: "focus", label: "Focus swap", detail: "Both gauges remain visible as emphasis alternates." },
+    { data: "double-welcome", label: "Double welcome", detail: "Both halves fill on connection, then show charge." },
+  ],
+} as const;
+
 function formatRemaining(seconds: number): string {
   const safe = Math.max(0, Math.ceil(seconds));
   const hours = Math.floor(safe / 3600);
@@ -105,6 +145,12 @@ function formatAge(seconds: number | null): string {
   if (seconds == null) return "never";
   if (seconds < 1) return `${Math.round(seconds * 1000)} ms ago`;
   return `${seconds.toFixed(1)} s ago`;
+}
+
+function controllerChargeLabel(controller: Status["controllers"]["controllers"][number]): string {
+  if (controller.percent != null) return `${controller.percent}%`;
+  if (controller.level != null) return `${controller.level}/4 level`;
+  return "battery unavailable";
 }
 
 function ArtworkImage({ artwork, title, compact = false, sampleLine }: {
@@ -376,7 +422,72 @@ function EventsPanel({ status, setStatus }: { status: Status; setStatus: (next: 
   );
 }
 
-type Page = "quick" | "artwork" | "performance" | "countdown" | "events" | "advanced";
+function ControllersPanel({ status, setStatus }: { status: Status; setStatus: (next: Status) => void }) {
+  const preview = async (kind: keyof typeof CONTROLLER_VARIANTS, variant: string) => {
+    await previewController(kind, variant);
+    setStatus(await getStatus());
+  };
+  const groups = [
+    ["connect", "Connection", "controller_connect_enabled", "controller_connect_variant"],
+    ["persistent", "Permanent gauge", null, "controller_persistent_variant"],
+    ["low", "Low battery", "controller_low_enabled", "controller_low_variant"],
+    ["charging", "Charging", "controller_charging_enabled", "controller_charging_variant"],
+    ["duo", "Two controllers", null, "controller_duo_variant"],
+  ] as const;
+  return <>
+    <PanelSection title="Controller battery">
+      <PanelSectionRow><div style={{ fontSize: ".8em", opacity: .8 }}>
+        {status.controllers.controllers.length ? status.controllers.controllers.map((controller) =>
+          `${controller.name}: ${controllerChargeLabel(controller)}${controller.charging ? " · charging" : ""}`).join(" · ")
+          : "No controller reported by Steam yet."}
+      </div></PanelSectionRow>
+      <PanelSectionRow><DropdownItem label="Permanent battery gauge"
+        description="Off by default. On Home replaces the home display; Everywhere also replaces Artwork or Performance while a game runs. Countdown still wins."
+        rgOptions={CONTROLLER_DISPLAY_OPTIONS} selectedOption={status.controller_battery_display}
+        onChange={async (option) => setStatus(await setSetting("controller_battery_display", String(option.data)))} /></PanelSectionRow>
+      <PanelSectionRow><ToggleField label="Brief controller alerts"
+        description="Independent of the permanent gauge. Short signals restore the live display afterward."
+        checked={status.controller_alerts_enabled}
+        onChange={async (value) => setStatus(await setSetting("controller_alerts_enabled", value))} /></PanelSectionRow>
+      <PanelSectionRow><DropdownItem label="Where alerts play" rgOptions={CONTROLLER_ALERT_OPTIONS}
+        selectedOption={status.controller_alert_context}
+        onChange={async (option) => setStatus(await setSetting("controller_alert_context", String(option.data)))} /></PanelSectionRow>
+      <PanelSectionRow><SliderField label="Low battery warning" value={status.controller_low_threshold}
+        min={5} max={30} step={5} showValue valueSuffix="%"
+        onChange={async (value) => setStatus(await setSetting("controller_low_threshold", value))} /></PanelSectionRow>
+      <PanelSectionRow><div style={{ width: "100%", fontSize: ".78em", opacity: .8 }}>
+        {status.controllers.active ? `Playing: ${status.controllers.kind} · ${status.controllers.variant}` : "No controller animation active"}
+        <div>Coarse Steam levels are labelled as levels, never invented percentages.</div>
+      </div></PanelSectionRow>
+      <PanelSectionRow><div style={{ fontSize: ".78em", opacity: .75 }}>
+        When a second controller connects, the two-controller animation uses the selected style. The centre LED stays off in the permanent two-controller gauge.
+      </div></PanelSectionRow>
+    </PanelSection>
+    {groups.map(([kind, title, enabledKey, variantKey]) => {
+      const selected = status[variantKey];
+      const options = CONTROLLER_VARIANTS[kind];
+      const detail = options.find((item) => item.data === selected)?.detail ?? "";
+      return <PanelSection key={kind} title={title}>
+        {enabledKey ? <PanelSectionRow><ToggleField label={`Show ${title.toLowerCase()}`}
+          checked={status[enabledKey]}
+          onChange={async (value) => setStatus(await setSetting(enabledKey, value))} /></PanelSectionRow> : null}
+        <PanelSectionRow><DropdownItem label="Visual style" rgOptions={[...options]}
+          selectedOption={selected}
+          onChange={async (option) => setStatus(await setSetting(variantKey, String(option.data)))} /></PanelSectionRow>
+        <PanelSectionRow><div style={{ fontSize: ".8em", opacity: .78 }}>{detail}</div></PanelSectionRow>
+        <PanelSectionRow><div style={{ width: "100%", fontSize: ".78em", opacity: .8 }}>
+          {status.controllers.active && status.controllers.kind === kind ? `Playing: ${status.controllers.variant}` : "Preview plays here"}
+          <PalettePreview colors={status.controllers.active && status.controllers.kind === kind ? status.controllers.colors : []} />
+        </div></PanelSectionRow>
+        <PanelSectionRow><ButtonItem label={`Preview ${title.toLowerCase()}`}
+          description="Works without a connected controller or enabled live alerts. Protected countdowns and Disabled mode still take priority."
+          onClick={() => void preview(kind, selected).catch(console.warn)}>Play selected</ButtonItem></PanelSectionRow>
+      </PanelSection>;
+    })}
+  </>;
+}
+
+type Page = "quick" | "artwork" | "performance" | "countdown" | "events" | "controllers" | "advanced";
 
 function Content({ page = "quick" }: { page?: Page }) {
   const [status, setStatusState] = useState<Status | null>(null);
@@ -394,7 +505,7 @@ function Content({ page = "quick" }: { page?: Page }) {
     void getStatus().then((next) => alive && setStatus(next)).catch(console.warn);
     const timer = window.setInterval(() => {
       void getStatus().then((next) => alive && setStatus(next)).catch(() => undefined);
-    }, page === "events" ? 180 : 1000);
+    }, page === "events" || page === "controllers" ? 180 : 1000);
     return () => {
       alive = false;
       window.clearInterval(timer);
@@ -502,12 +613,15 @@ function Content({ page = "quick" }: { page?: Page }) {
     && hero?.appid === status.game.appid && hero.found && hero.data_uri ? hero : null;
   const performanceColors = performancePreview(status);
   const baseShownColors = status.provider.startsWith("event:") ? status.events.colors
+    : status.provider.startsWith("controller:") || status.provider === "controller-battery" ? status.controllers.colors
     : status.provider === "countdown" ? status.countdown.colors
       : status.provider.startsWith("artwork") ? artColors
         : status.provider.startsWith("performance") ? performanceColors : [];
   const shownColors = status.provider.endsWith("+recording")
     ? addRecordingMarker(status, baseShownColors) : baseShownColors;
   const shownLabel = status.provider.startsWith("event:") ? status.events.variant
+    : status.provider.startsWith("controller:") ? `Controller · ${status.controllers.variant}`
+      : status.provider === "controller-battery" ? "Controller battery"
     : status.provider === "countdown" ? status.countdown.label
       : status.provider === "valve" ? "Steam / another app"
         : status.provider === "none" ? "No SignalBar output" : status.provider;
@@ -543,6 +657,10 @@ function Content({ page = "quick" }: { page?: Page }) {
           <div style={{ width: "100%", fontSize: ".84em" }}>
             <div><b>{shownLabel}</b></div>
             {status.game.title ? <div>{status.game.title}</div> : null}
+            {status.provider.startsWith("controller") && status.controllers.controllers.length ? <div style={{ marginTop: 5 }}>
+              {status.controllers.controllers.map((controller) =>
+                `${controller.name} ${controllerChargeLabel(controller)}`).join(" · ")}
+            </div> : null}
             {status.mode === "performance" ? <div style={{ marginTop: 7 }}>
               <div style={{ marginBottom: 4, fontSize: ".92em", opacity: .72 }}>Performance sensors</div>
               <PerformanceReadout status={status} />
@@ -748,6 +866,8 @@ function Content({ page = "quick" }: { page?: Page }) {
 
       {page === "events" ? <EventsPanel status={status} setStatus={setStatus} /> : null}
 
+      {page === "controllers" ? <ControllersPanel status={status} setStatus={setStatus} /> : null}
+
       {page === "advanced" ? <PanelSection title="Advanced / debug">
         <PanelSectionRow>
           <ToggleField
@@ -783,6 +903,12 @@ function Content({ page = "quick" }: { page?: Page }) {
                     : status.debug.parental_callback_state === "received"
                       ? `received after ${Math.round(status.debug.parental_callback_delay_ms ?? 0)} ms`
                       : status.debug.parental_callback_state}
+                </div>
+                <div>
+                  Controller data: {status.debug.controller_callback_source}
+                  {status.debug.controller_last_update_age_s == null
+                    ? " · no reading yet"
+                    : ` · ${formatAge(status.debug.controller_last_update_age_s)}`}
                 </div>
               </div>
             </PanelSectionRow>
@@ -825,6 +951,7 @@ function SignalBarSettings() {
     { title: "Performance", route: "/signalbar/settings/performance", content: <Content page="performance" /> },
     { title: "Playtime", route: "/signalbar/settings/countdown", content: <Content page="countdown" /> },
     { title: "Light events", route: "/signalbar/settings/events", content: <Content page="events" /> },
+    { title: "Controllers", route: "/signalbar/settings/controllers", content: <Content page="controllers" /> },
     "separator",
     { title: "Advanced / debug", route: "/signalbar/settings/advanced", content: <Content page="advanced" /> },
   ]} />;

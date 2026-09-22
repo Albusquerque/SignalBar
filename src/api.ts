@@ -27,3 +27,14 @@ export const startFreeTimer = callable<[minutes: number], Status>("start_free_ti
 export const stopFreeTimer = callable<[], Status>("stop_free_timer");
 export const previewCountdown = callable<[], Status>("preview_countdown");
 export const triggerEvent = callable<[kind: string, preview: boolean, variant: string], boolean>("trigger_event");
+export const updateControllers = callable<[controllers: ControllerBatteryUpdate[], source: string], boolean>("update_controllers");
+export const resetControllers = callable<[], boolean>("reset_controllers");
+export const previewController = callable<[kind: string, variant: string], boolean>("preview_controller");
+
+export interface ControllerBatteryUpdate {
+  id: string;
+  name: string;
+  percent: number | null;
+  level: number | null;
+  charging: boolean | null;
+}

@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.5.0-beta.1 - 2026-09-22
+
+- Add experimental Steam controller battery signals: connection, low battery,
+  charging, a permanent single-controller gauge, and a split two-controller
+  gauge with the centre LED off.
+- Offer three selectable visual styles for each of the five situations and
+  immediate preview buttons that do not require a connected controller.
+- Separate the permanent gauge (Off, On Home, Everywhere) from brief-alert
+  locations (Off, On Home, In game, Home + in game). Alerts work even while the
+  permanent gauge is off. Both categories preserve the selected base display
+  after their signal ends.
+- Detect controller-list, battery, and controller-state changes from Steam's
+  frontend callbacks; serialize state updates to avoid stale asynchronous
+  snapshots replacing newer readings.
+- Warn once when a known battery crosses a configurable 5–30% threshold, or
+  reaches Steam's lowest coarse level, and re-arm after charging. Never present
+  a coarse battery level as a fabricated exact percentage.
+- Keep Steam Families' final five minutes protected. Low-battery alerts have
+  priority over ordinary short events, while native LED writes interrupt active
+  animations. A permanent gauge never overrides a countdown or Disabled mode.
+- Add a Controllers settings page, live logical preview, controller readout,
+  callback-source diagnostic, new README section, and a captured
+  controller-battery GIF.
+- This is an opt-in beta for the permanent gauge. Steam's private controller
+  callback payloads and controller-model compatibility still need physical
+  Steam Machine testing.
+
 ## 0.4.0 - 2026-09-21
 
 - Add opt-in Light events for Steam notifications, achievements, screenshots,

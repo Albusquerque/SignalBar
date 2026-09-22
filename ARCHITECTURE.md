@@ -8,8 +8,9 @@
   `PerformanceProvider` reads local CPU/GPU Linux metrics at 2 Hz,
   `ArtworkProvider` owns validated/cacheable browser samples,
   `CountdownProvider` owns independent parental/free/preview deadlines,
-  `EventProvider` owns short queued animations and recording state, and
-  `IdleProvider` deliberately emits no frame (Vanilla).
+  `EventProvider` owns short queued animations and recording state,
+  `ControllerProvider` owns controller inventory, battery thresholds and
+  optional gauges, and `IdleProvider` deliberately emits no frame (Vanilla).
 - **Arbiter** is pure policy. Disabled is an explicit user stop. Short, opted-in
   events can play over a stable native frame even when no game is running.
   Otherwise Valve/explicit Steam activity is above SignalBar providers, Steam
@@ -20,6 +21,9 @@
   replaces, rather than blends with, the base colour. Optional isolation makes
   its immediate neighbours black to reduce optical bleed through the diffuser;
   this isolation is enabled by default.
+  Low-battery animations outrank ordinary short events. The optional persistent
+  controller gauge replaces Artwork or Performance only in its selected
+  context, and never displaces a countdown.
 - **Renderer** is the only production component holding the hardware adapter.
   It validates exactly 17 RGB pixels, serializes access, coalesces identical
   frames, rate-limits writes, reads back the actual signature and fails closed.
@@ -29,7 +33,7 @@
 Decky's one-time frontend plugin initializer starts a background SignalBar
 runtime immediately when the bundle loads. That runtime reports the already
 running game, polls as a fallback, subscribes to game lifetime, Steam Families,
-download and resume events, and samples local Artwork without waiting for the
+download, controller and resume events, and samples local Artwork without waiting for the
 settings panel to mount. Backend calls that race plugin startup are retried.
 The panel is only a view and settings surface; closing or never opening it does
 not stop providers. `onDismount` unregisters every Steam callback and timer.
@@ -37,6 +41,26 @@ Steam notification types supply generic notices, achievements and recording
 transitions. The GameSessions screenshot hook accepts only written captures;
 the generic screenshot type is fallback. The frontend sends only a validated
 event kind to the backend, never notification contents.
+
+## Controller battery flow
+
+The Decky runtime subscribes to Steam controller-list, battery and state-change
+callbacks. It identifies controllers by Steam's session controller index,
+coalesces unchanged battery readings, and serializes snapshots before sending
+them to the backend. The first inventory snapshot is a baseline, not a fake
+connection alert. The backend validates at most eight entries and never
+converts an unknown or coarse battery reading to a displayed exact percentage.
+Coarse one-to-four levels can still drive a labelled approximate gauge; the
+lowest level can trigger a warning. Exact percentages use a configurable
+low-battery threshold with hysteresis to avoid repeated alerts.
+
+Brief alerts have an independent Home / In-game policy and can run with the
+permanent gauge off. The provider's short animation expires by monotonic time;
+the arbiter then recomputes the current display. A second controller can use
+an eight-plus-dark-centre-plus-eight view. Critical playtime countdowns clear
+controller animations, and a new native LED write cancels them through the
+same ownership guard as other light events. The callbacks are private SteamUI
+APIs, so controller-model compatibility requires device testing.
 
 ## Light-event arbitration
 

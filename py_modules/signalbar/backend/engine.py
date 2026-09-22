@@ -13,6 +13,7 @@ from signalbar.arbiter import Arbiter, VanillaGuard
 from signalbar.hardware import ValveLedHardware
 from signalbar.models import GameState
 from signalbar.providers import ArtworkProvider, CountdownProvider, EventProvider, IdleProvider, PerformanceProvider
+from signalbar.providers.controller import ControllerProvider
 from signalbar.renderer import Renderer
 
 
@@ -26,6 +27,7 @@ class Engine:
         self.performance = PerformanceProvider()
         self.events = EventProvider()
         self.events.set_variants(settings.all())
+        self.controllers = ControllerProvider()
         self.idle = IdleProvider()
         self.arbiter = Arbiter()
         self._lock = threading.RLock()
@@ -49,6 +51,8 @@ class Engine:
             "parental_callback_state": "idle",
             "parental_callback_delay_ms": None,
             "parental_wait_started_at": 0.0,
+            "controller_callback_source": "waiting",
+            "controller_last_update_at": 0.0,
         }
 
     def _info(self, message):
@@ -75,6 +79,7 @@ class Engine:
         with self._lock:
             self.events.clear_transients()
             self.events.clear_recording()
+            self.controllers.clear()
             if self._renderer:
                 self._renderer.relinquish(restore_if_owned=True)
             self._owner = "Valve"
@@ -96,6 +101,7 @@ class Engine:
             if changed or not self._game.running:
                 self.artwork.clear()
                 self._artwork_identity = None
+            self.controllers.cancel_for_settings(self.settings.all(), self._game.running)
 
     def prepare_artwork(self, appid, fingerprint, filename="", source="hero"):
         artwork_settings = self.settings.artwork_for(appid)
@@ -202,6 +208,8 @@ class Engine:
         kind = str(kind or "")
         if values["mode"] == "disabled":
             return False
+        if self.controllers.event_output().provider == "controller:low":
+            return False
         if not preview:
             setting = {
                 "notification": "event_notifications_enabled",
@@ -226,9 +234,44 @@ class Engine:
             return False
         return self.events.trigger(kind, preview=bool(preview), variant=variant)
 
+    def update_controllers(self, controllers, source="Steam callback"):
+        values = self.settings.all()
+        with self._lock:
+            running = self._game.running
+            self._runtime_debug["controller_callback_source"] = str(source or "Steam callback")[:48]
+            self._runtime_debug["controller_last_update_at"] = time.monotonic()
+        if self.controllers.update(controllers, values, running) == "low":
+            self.events.clear_transients()
+
+    def reset_controllers(self):
+        self.controllers.clear()
+        with self._lock:
+            self._runtime_debug["controller_callback_source"] = "waiting"
+            self._runtime_debug["controller_last_update_at"] = 0.0
+
+    def preview_controller(self, kind, variant=""):
+        values = self.settings.all()
+        if values["mode"] == "disabled":
+            return False
+        with self._lock:
+            running = self._game.running
+        countdown = self.countdown.status(
+            allow_parental=values["parental_countdown_enabled"] and running,
+        )
+        if countdown["active"] and countdown["remaining_seconds"] <= 300:
+            return False
+        selected = str(kind or "")
+        played = self.controllers.preview(selected, values, str(variant or ""))
+        if played and selected == "low":
+            self.events.clear_transients()
+        return played
+
     def update_settings(self, changes):
         values = self.settings.update(changes)
         self.events.set_variants(values)
+        with self._lock:
+            running = self._game.running
+        self.controllers.cancel_for_settings(values, running)
         if not values["events_enabled"] or not values["event_recording_enabled"]:
             self.events.clear_recording()
         if not values["events_enabled"]:
@@ -244,6 +287,8 @@ class Engine:
             ):
                 if key in changes and not values[key]:
                     self.events.cancel_kinds(kinds)
+        if values["mode"] == "disabled":
+            self.controllers.clear_transients()
         if "parental_countdown_enabled" in changes and not values["parental_countdown_enabled"]:
             # Turning the feature off is an immediate cancellation, not only
             # a visual filter. Later callbacks are ignored until re-enabled.
@@ -352,17 +397,22 @@ class Engine:
                 )
                 if signal_critical:
                     self.events.clear_transients()
+                    self.controllers.clear_transients()
                 if event_interrupted:
                     self.events.clear_transients()
+                    self.controllers.clear_transients()
                 event = self.events.output()
+                controller_event = self.controllers.event_output()
+                controller_base = self.controllers.persistent_output(values, game.running)
                 # Moving event waves need more than ten samples per second to
                 # visibly visit all 17 positions. Normal providers stay at
                 # the conservative 10 Hz cadence.
-                interval = 0.06 if event.frame is not None else 0.10
+                interval = 0.06 if event.frame is not None or controller_event.frame is not None else 0.10
                 decision = self.arbiter.choose(
                     mode=values["mode"], guard_allows=allowed, game=game,
                     performance=performance, artwork=artwork, idle=self.idle.output(),
                     signal=signal, event=event, signal_critical=signal_critical,
+                    controller_event=controller_event, controller_base=controller_base,
                     recording_marker=(
                         self.events.recording and values["events_enabled"]
                         and values["event_recording_enabled"]
@@ -372,7 +422,7 @@ class Engine:
                 )
 
                 if decision.frame is not None:
-                    is_event = decision.provider.startswith("event:")
+                    is_event = decision.provider.startswith(("event:", "controller:"))
                     if is_event and not allowed:
                         event_preempted_valve = True
                     elif not is_event:
@@ -442,6 +492,10 @@ class Engine:
             }
             runtime_debug = dict(self._runtime_debug)
             wait_started = runtime_debug.pop("parental_wait_started_at", 0.0)
+            controller_last_update_at = runtime_debug.pop("controller_last_update_at", 0.0)
+            runtime_debug["controller_last_update_age_s"] = (
+                max(0.0, now - controller_last_update_at) if controller_last_update_at else None
+            )
             runtime_debug["parental_wait_s"] = (
                 max(0.0, now - wait_started) if wait_started else None
             )
@@ -471,8 +525,9 @@ class Engine:
                     values["temperature_custom_hot"],
                 ),
             )
+            controller_status = self.controllers.status(values, self._game.running)
             return {
-                "version": "0.4.0",
+                "version": "0.5.0-beta.1",
                 "available": self._available,
                 "active": self._owner == "SignalBar",
                 "owner": self._owner,
@@ -509,6 +564,19 @@ class Engine:
                 "event_notification_variant": values["event_notification_variant"],
                 "event_achievement_variant": values["event_achievement_variant"],
                 "event_screenshot_variant": values["event_screenshot_variant"],
+                "controller_battery_display": values["controller_battery_display"],
+                "controller_alert_context": values["controller_alert_context"],
+                "controller_alerts_enabled": values["controller_alerts_enabled"],
+                "controller_connect_enabled": values["controller_connect_enabled"],
+                "controller_low_enabled": values["controller_low_enabled"],
+                "controller_charging_enabled": values["controller_charging_enabled"],
+                "controller_low_threshold": values["controller_low_threshold"],
+                "controller_connect_variant": values["controller_connect_variant"],
+                "controller_persistent_variant": values["controller_persistent_variant"],
+                "controller_low_variant": values["controller_low_variant"],
+                "controller_charging_variant": values["controller_charging_variant"],
+                "controller_duo_variant": values["controller_duo_variant"],
+                "controllers": controller_status,
                 "events": self.events.status(),
                 "game": {"appid": self._game.appid, "title": self._game.title},
                 "performance": {

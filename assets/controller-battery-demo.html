@@ -1,0 +1,186 @@
+<div id="sb-battery-v2">
+  <style>
+    #sb-battery-v2 { --bg:#0e141c;--panel:#17212b;--panel2:#1e2c39;--line:#354553;--text:#eef5f8;--muted:#afc0cb;--cyan:#54d8e9;--green:#80e5b2;--amber:#ffca78;--red:#ff6975;--off:#0a0e11; color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:1024px;margin:auto; }
+    #sb-battery-v2 *,#sb-battery-v2 *::before,#sb-battery-v2 *::after{box-sizing:border-box}
+    #sb-battery-v2 .shell{background:var(--bg);border:1px solid #3d4e5b;border-radius:17px;overflow:hidden;box-shadow:0 22px 70px #0006}
+    #sb-battery-v2 .top{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:15px 19px;background:#17222d;border-bottom:1px solid var(--line)}
+    #sb-battery-v2 .top strong{font-size:18px;font-weight:500;letter-spacing:.02em}
+    #sb-battery-v2 .top span{font-size:12px;color:var(--muted)}
+    #sb-battery-v2 .scenes{display:flex;flex-wrap:wrap;gap:6px;padding:10px 15px;background:#111a24;border-bottom:1px solid var(--line)}
+    #sb-battery-v2 button,#sb-battery-v2 select{font:inherit}
+    #sb-battery-v2 .scene,#sb-battery-v2 .variant{min-height:40px;padding:7px 10px;border:1px solid #47596b;border-radius:7px;color:#d9e7ee;background:#223240;font-size:13px}
+    #sb-battery-v2 .scene[aria-pressed=true],#sb-battery-v2 .variant[aria-pressed=true]{color:#0b2027;background:#a5e8ed;border-color:#a5e8ed;font-weight:500}
+    #sb-battery-v2 .layout{display:grid;grid-template-columns:minmax(0,1.38fr) minmax(280px,.8fr)}
+    #sb-battery-v2 .visual{min-width:0;border-right:1px solid var(--line)}
+    #sb-battery-v2 .stage{height:370px;position:relative;display:flex;align-items:flex-end;justify-content:center;overflow:hidden;background:radial-gradient(circle at 53% 28%,#b4aaa2,#90847d 67%,#726c68)}
+    #sb-battery-v2 .stage::before{content:"";position:absolute;top:59%;width:100%;height:7px;background:#805f4e;opacity:.72}
+    #sb-battery-v2 .stage::after{content:"";position:absolute;bottom:0;width:100%;height:82px;background:linear-gradient(175deg,#b9946f,#e2c39c 34%,#b78d62);box-shadow:inset 0 6px 6px #ffe2ba88}
+    #sb-battery-v2 .stage-hud{position:absolute;z-index:5;top:15px;left:15px;right:15px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px}
+    #sb-battery-v2 .stage-hud span{background:#141a20df;padding:6px 9px;border-radius:4px;box-shadow:0 4px 12px #0003}
+    #sb-battery-v2 .machine{width:min(75%,330px);position:relative;z-index:3;margin-bottom:60px;filter:drop-shadow(12px 16px 13px #261d1abb)}
+    #sb-battery-v2 .cube{height:245px;background:linear-gradient(104deg,#282b2d,#191d1f 42%,#25282a 80%,#1b1e20);border-radius:3px 4px 0 0;box-shadow:inset 1px 0 1px #b7bdb849,inset -2px 0 3px #07090a,inset 0 1px 1px #aaa9a64f}
+    #sb-battery-v2 .seam{height:12px;position:relative;margin:0 5px;background:#080b0d;isolation:isolate}
+    #sb-battery-v2 .light,#sb-battery-v2 .bloom{position:absolute;left:1%;right:1%;top:2px;height:7px;pointer-events:none;background:#090e11}
+    #sb-battery-v2 .light{z-index:2;filter:blur(1.5px)}
+    #sb-battery-v2 .bloom{z-index:1;top:-11px;height:34px;filter:blur(12px);opacity:.85}
+    #sb-battery-v2 .fascia{height:54px;padding:0 6%;display:flex;align-items:center;gap:10%;background:linear-gradient(112deg,#24282a,#1b1e20 67%,#292c2d);box-shadow:inset 0 2px 3px #7173703a}
+    #sb-battery-v2 .usb{width:15%;height:12px;background:#050708;box-shadow:inset 0 2px 2px #000,0 1px 1px #b9b9b333}
+    #sb-battery-v2 .usb::after{content:"";display:block;width:70%;height:3px;margin:5px auto 0;background:#555b59}
+    #sb-battery-v2 .slot{width:11%;height:3px;background:#080a0b}
+    #sb-battery-v2 .dot{width:5px;height:5px;margin-left:auto;border-radius:50%;background:#f1f3fb;box-shadow:0 0 6px #dae3ff;flex:none}
+    #sb-battery-v2 .power{width:27px;height:27px;border-radius:50%;background:#282c2c;box-shadow:0 0 0 1px #080a0b,inset 1px 1px 2px #a4acaa45;flex:none}
+    #sb-battery-v2 .preview{padding:15px 17px 17px;background:#16212c}
+    #sb-battery-v2 .readout{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px;font-size:14px}
+    #sb-battery-v2 .readout strong{font-weight:500}
+    #sb-battery-v2 .status{font-size:12px;color:var(--muted);text-align:right}
+    #sb-battery-v2 .logic{display:grid;grid-template-columns:repeat(17,minmax(0,1fr));gap:3px}
+    #sb-battery-v2 .logic i{display:block;height:21px;border-radius:2px;background:#303c47}
+    #sb-battery-v2 .caption{min-height:32px;margin:9px 0 0;color:var(--muted);font-size:12px;line-height:1.35}
+    #sb-battery-v2 .variant-area{padding:13px 17px 16px;background:#12202b;border-top:1px solid var(--line)}
+    #sb-battery-v2 .variant-title{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:#b8cbd5;margin-bottom:8px}
+    #sb-battery-v2 .variants{display:flex;flex-wrap:wrap;gap:6px}
+    #sb-battery-v2 .variant-detail{font-size:12px;color:var(--muted);margin:10px 0 0;line-height:1.4;min-height:33px}
+    #sb-battery-v2 .settings{padding:17px 18px;background:#1b2936}
+    #sb-battery-v2 .settings-head{display:flex;justify-content:space-between;align-items:center;gap:8px;padding-bottom:11px;border-bottom:1px solid #405160}
+    #sb-battery-v2 .settings-head strong{font-size:16px;font-weight:500}
+    #sb-battery-v2 .settings-head span{font-size:11px;color:#a7eadd;background:#245b56;border-radius:4px;padding:4px 6px}
+    #sb-battery-v2 .group-label{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:#bbcedb;margin:17px 0 7px}
+    #sb-battery-v2 .setting{display:flex;align-items:center;justify-content:space-between;gap:9px;min-height:49px;border-top:1px solid #394a59;font-size:13px;line-height:1.3}
+    #sb-battery-v2 .setting span{max-width:59%}
+    #sb-battery-v2 .setting select{max-width:145px;padding:6px 7px;border:1px solid #536879;border-radius:5px;background:#2a3c4d;color:#f3f9fb;font-size:12px}
+    #sb-battery-v2 .setting input{width:19px;height:19px;accent-color:#74dbe5}
+    #sb-battery-v2 .hint{font-size:12px;line-height:1.45;color:#afc3ce;margin:8px 0 0}
+    #sb-battery-v2 .eligibility{font-size:12px;color:#b4ebd7;background:#21473f;padding:8px 9px;border-radius:5px;margin-top:12px}
+    #sb-battery-v2 .eligibility.off{color:#ffd8ac;background:#513d32}
+    #sb-battery-v2 .priority{border-top:1px solid #405160;padding-top:12px;margin:15px 0 0;font-size:11px;line-height:1.45;color:#aabcc8}
+    @media(max-width:720px){#sb-battery-v2 .layout{grid-template-columns:1fr}#sb-battery-v2 .visual{border-right:0;border-bottom:1px solid var(--line)}#sb-battery-v2 .stage{height:350px}#sb-battery-v2 .machine{margin-bottom:57px}}
+    @media(max-width:390px){#sb-battery-v2 .stage{height:320px}#sb-battery-v2 .machine{width:min(77%,280px);margin-bottom:54px}#sb-battery-v2 .cube{height:208px}#sb-battery-v2 .fascia{height:48px}#sb-battery-v2 .stage-hud{left:8px;right:8px;top:9px;font-size:11px}#sb-battery-v2 .logic{gap:2px}}
+    @media(prefers-reduced-motion:reduce){#sb-battery-v2 .light,#sb-battery-v2 .bloom{transition:none}}
+  </style>
+  <section class="shell" aria-label="SignalBar controller battery visual concept">
+    <header class="top"><strong>SignalBar</strong><span>Controller battery · visual concepts · 17 LED</span></header>
+    <nav class="scenes" aria-label="Controller situations">
+      <button class="scene cursor-interaction" type="button" data-scene="connect" aria-pressed="true">Connect</button>
+      <button class="scene cursor-interaction" type="button" data-scene="persistent" aria-pressed="false">Battery gauge</button>
+      <button class="scene cursor-interaction" type="button" data-scene="low" aria-pressed="false">Low battery</button>
+      <button class="scene cursor-interaction" type="button" data-scene="charging" aria-pressed="false">Charging</button>
+      <button class="scene cursor-interaction" type="button" data-scene="duo" aria-pressed="false">Two controllers</button>
+    </nav>
+    <div class="layout">
+      <div class="visual">
+        <div class="stage">
+          <div class="stage-hud"><span class="hud-name">Controller 1</span><span class="hud-value">74% battery</span></div>
+          <div class="machine" aria-hidden="true"><div class="cube"></div><div class="seam"><div class="bloom"></div><div class="light"></div></div><div class="fascia"><i class="usb"></i><i class="usb"></i><i class="slot"></i><i class="dot"></i><i class="power"></i></div></div>
+        </div>
+        <div class="preview"><div class="readout"><strong class="readout-main">Controller 1 · 74%</strong><span class="status">Connected</span></div><div class="logic" role="img" aria-label="17 LED logical preview"></div><p class="caption" aria-live="polite"></p></div>
+        <div class="variant-area"><div class="variant-title">Three looks for this situation</div><div class="variants" role="group" aria-label="Animation variants"></div><p class="variant-detail" aria-live="polite"></p></div>
+      </div>
+      <aside class="settings" aria-label="Suggested Decky settings">
+        <div class="settings-head"><strong>Controller battery</strong><span>CONCEPT</span></div>
+        <div class="group-label">Where am I?</div>
+        <label class="setting"><span>Preview context</span><select id="sb2-context" class="cursor-interaction"><option value="home">Home</option><option value="game">In game</option></select></label>
+        <div class="group-label">Persistent display</div>
+        <label class="setting"><span>Battery gauge</span><select id="sb2-persistent" class="cursor-interaction"><option value="off" selected>Off</option><option value="home">On Home</option><option value="everywhere">Everywhere</option></select></label>
+        <p class="hint">Replaces the base Artwork or Performance display only where enabled.</p>
+        <div class="group-label">Brief alerts</div>
+        <label class="setting"><span>Show alerts</span><select id="sb2-alerts" class="cursor-interaction"><option value="off">Off</option><option value="home">On Home</option><option value="game">In game</option><option value="both" selected>Home + in game</option></select></label>
+        <label class="setting"><span>On connect</span><input id="sb2-connect" type="checkbox" checked></label>
+        <label class="setting"><span>Low battery</span><input id="sb2-low" type="checkbox" checked></label>
+        <label class="setting"><span>Charging change</span><input id="sb2-charging" type="checkbox" checked></label>
+        <p class="hint">Alerts work even when the permanent gauge is Off. Each one briefly interrupts the base display, then gives it back.</p>
+        <div class="eligibility" aria-live="polite"></div>
+        <p class="priority">Priority concept: Steam/system light behavior and the final Steam Families countdown stay protected. A battery alert is shown only when it will still be useful.</p>
+      </aside>
+    </div>
+  </section>
+  <script>
+    (() => {
+      const root=document.getElementById('sb-battery-v2');
+      const $=s=>root.querySelector(s);
+      const OFF='#0a0e11', CYAN='#54d8e9', GREEN='#80e5b2', AMBER='#ffca78', RED='#ff6975', WHITE='#f6f7ef', SOFT='#408b80';
+      const state={scene:'connect',variant:0,context:'home',persistent:'off',alerts:'both',connect:true,low:true,charging:true};
+      const scenes={
+        connect:{name:'Controller 1 · 74%',status:'Connected',hud:'74% battery',variants:[['Welcome','Two light waves greet the controller, meet in the middle, then reveal its battery.'],['Orbit','A bright point travels the full bar and settles into a clear 74% gauge.'],['Handshake','Two luminous points meet and send a gentle confirmation ripple outward.']]},
+        persistent:{name:'Controller 1 · 74%',status:'Battery gauge',hud:'74% battery',variants:[['Clean fill','An uncluttered gauge that stays still and readable.'],['Bright tip','A restrained marker makes the end of the charge immediately legible.'],['Soft horizon','Lower brightness with a broad, calm glow for a living-room setting.']]},
+        low:{name:'Controller 1 · 14%',status:'Low battery',hud:'14% battery',variants:[['Beacon','Two red edge calls, then the true remaining charge.'],['Drain','A red sweep visibly contracts to the last two LEDs.'],['Heartbeat','A measured double pulse followed by a steady low-battery gauge.']]},
+        charging:{name:'Controller 1 · 38%',status:'Charging',hud:'38% · charging',variants:[['Current','A white current moves only through the filled part of the gauge.'],['Soft breath','A subtle brightness swell makes charging visible without an endless chase.'],['Spark refill','A single spark travels into the charge level, then the gauge rests.']]},
+        duo:{name:'P1 74% · P2 25%',status:'Two controllers',hud:'74% · 25%',variants:[['Twin gauge','Eight LEDs per controller, with the centre dark. Both charges stay readable.'],['Focus swap','The two gauges remain present while brightness alternates between players.'],['Double welcome','Each half fills from its outer edge, then settles on both battery levels.']]}
+      };
+      const els=Array.from({length:17},()=>{const e=document.createElement('i');$('.logic').appendChild(e);return e});
+      let started=performance.now();
+      function blank(){return Array(17).fill(OFF)}
+      function fill(a,lo,hi,color){for(let i=Math.max(0,lo);i<=Math.min(16,hi);i++)a[i]=color}
+      function baseFrame(){const a=blank();fill(a,0,7,CYAN);return a}
+      function onContext(mode){return mode==='both'||mode==='everywhere'||mode===state.context}
+      function isEnabled(){const s=state.scene;if(s==='persistent'||s==='duo')return state.persistent==='everywhere'||state.persistent===state.context;if(!onContext(state.alerts))return false;return s==='connect'?state.connect:s==='low'?state.low:state.charging}
+      function signalFrame(t){
+        const a=blank(),s=state.scene,v=state.variant,p=t%5.6;
+        if(s==='persistent'){
+          fill(a,0,12,v===2?SOFT:GREEN);if(v===1)a[12]=WHITE;if(v===2){fill(a,0,12,'#6fc09c');a[12]=GREEN}return a;
+        }
+        if(s==='connect'){
+          if(v===0){if(p<1.45){let k=Math.min(3,Math.floor(p/.36));fill(a,k*2,k*2+1,CYAN);fill(a,15-k*2,16-k*2,CYAN)}else if(p<1.9){fill(a,6,10,WHITE)}else fill(a,0,12,GREEN)}
+          if(v===1){if(p<1.9){let k=Math.min(16,Math.floor(p/.11));a[k]=WHITE;if(k>0)a[k-1]=CYAN}else fill(a,0,12,GREEN)}
+          if(v===2){if(p<1.1){let k=Math.min(7,Math.floor(p/.14));a[k]=CYAN;a[16-k]=CYAN}else if(p<1.75){let k=Math.min(8,Math.floor((p-1.1)/.08));a[8-k]=CYAN;a[8+k]=CYAN;a[8]=WHITE}else fill(a,0,12,GREEN)}
+          return a;
+        }
+        if(s==='low'){
+          if(v===0){if(p<1.65&&Math.floor(p/.4)%2===0){fill(a,0,3,RED);fill(a,13,16,RED)}else fill(a,0,1,RED)}
+          if(v===1){if(p<1.75){let edge=16-Math.floor(p/.11);fill(a,0,edge,RED)}else fill(a,0,1,RED)}
+          if(v===2){if(p<1.8){let phase=p%.9;fill(a,0,1,phase<.2||phase>.33&&phase<.52?RED:'#74343e');if(phase<.2||phase>.33&&phase<.52){a[7]=RED;a[9]=RED}}else fill(a,0,1,RED)}
+          return a;
+        }
+        if(s==='charging'){
+          fill(a,0,5,CYAN);
+          if(v===0){let k=Math.floor(p/.35)%7;if(k<6)a[k]=WHITE}
+          if(v===1){fill(a,0,5,Math.sin(p*3)>0?CYAN:'#338b9a');a[5]=WHITE}
+          if(v===2){if(p<2){let k=Math.floor(p/.3);if(k<6)a[k]=WHITE}else a[5]=GREEN}
+          return a;
+        }
+        if(s==='duo'){
+          if(v===0){fill(a,0,5,GREEN);fill(a,15,16,AMBER)}
+          if(v===1){const focus=Math.floor(p/1.2)%2;fill(a,0,5,focus?SOFT:GREEN);fill(a,15,16,focus?AMBER:'#94744d')}
+          if(v===2){if(p<1.4){let left=Math.min(6,Math.floor(p/.19));let right=Math.min(2,Math.floor(p/.55));fill(a,0,left-1,GREEN);fill(a,17-right,16,AMBER)}else{fill(a,0,5,GREEN);fill(a,15,16,AMBER)}}
+          return a;
+        }
+        return a;
+      }
+      function updateInfo(){
+        const sc=scenes[state.scene],variant=sc.variants[state.variant];
+        $('.readout-main').textContent=sc.name;$('.status').textContent=sc.status;$('.hud-name').textContent=state.scene==='duo'?'Two controllers':'Controller 1';$('.hud-value').textContent=sc.hud;
+        $('.hud-value').style.color=state.scene==='low'?RED:state.scene==='charging'?CYAN:state.scene==='duo'?AMBER:GREEN;
+        $('.variant-detail').textContent=variant[1];
+        const eligible=isEnabled(),event=state.scene!=='persistent'&&state.scene!=='duo';
+        $('.eligibility').textContent=eligible?(event?'Would play briefly in this context, then restore the base display.':'Would stay visible in this context.'):(event?'Preview only: alerts are disabled in this context.':'Preview only: permanent battery display is disabled in this context.');
+        $('.eligibility').classList.toggle('off',!eligible);
+        $('.caption').textContent=state.scene==='low'?'One alert per threshold crossing, not at every battery reading.':state.scene==='connect'?'A true new connection triggers this, not each status refresh.':state.scene==='duo'?'Centre LED remains off, separating Player 1 and Player 2.':state.scene==='persistent'?'This is a base display, separate from brief alerts.':'Charging is a brief event, with no permanent animation unless the gauge is enabled.';
+        $('.logic').setAttribute('aria-label',`${sc.name}. ${variant[0]} animation. ${eligible?'Enabled':'Preview only'} in ${state.context}.`);
+        root.querySelectorAll('.scene').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.scene===state.scene)));
+        $('.variants').replaceChildren(...sc.variants.map(([name],i)=>{const b=document.createElement('button');b.type='button';b.className='variant cursor-interaction';b.textContent=`${String.fromCharCode(65+i)} · ${name}`;b.setAttribute('aria-pressed',String(i===state.variant));b.addEventListener('click',()=>{state.variant=i;started=performance.now();updateInfo();save()});return b}));
+      }
+      function render(){
+        const t=(performance.now()-started)/1000,brief=state.scene!=='persistent'&&state.scene!=='duo';
+        const colors=brief&&t%7>5.6?baseFrame():signalFrame(t);
+        const gradient=`linear-gradient(90deg,${colors.map((c,i)=>`${c} ${(i/17*100).toFixed(2)}%,${c} ${((i+1)/17*100).toFixed(2)}%`).join(',')})`;
+        $('.light').style.background=gradient;$('.bloom').style.background=gradient;
+        els.forEach((e,i)=>e.style.background=colors[i]===OFF?'#303c47':colors[i]);
+        if(brief){$('.status').textContent=t%7>5.6?'Base display restored':scenes[state.scene].status}
+      }
+      function save(){if(globalThis.openai?.setWidgetState)globalThis.openai.setWidgetState({modelContent:{...state}}).catch(()=>{})}
+      const saved=globalThis.openai?.widgetState?.modelContent;
+      if(saved&&typeof saved==='object'){
+        if(scenes[saved.scene])state.scene=saved.scene;
+        if(Number.isInteger(saved.variant)&&saved.variant>=0&&saved.variant<3)state.variant=saved.variant;
+        if(['home','game'].includes(saved.context))state.context=saved.context;
+        if(['off','home','everywhere'].includes(saved.persistent))state.persistent=saved.persistent;
+        if(['off','home','game','both'].includes(saved.alerts))state.alerts=saved.alerts;
+        for(const key of ['connect','low','charging'])if(typeof saved[key]==='boolean')state[key]=saved[key];
+      }
+      for(const [key,id] of [['context','#sb2-context'],['persistent','#sb2-persistent'],['alerts','#sb2-alerts']]){$(id).value=state[key];$(id).addEventListener('change',e=>{state[key]=e.target.value;updateInfo();save()})}
+      for(const [key,id] of [['connect','#sb2-connect'],['low','#sb2-low'],['charging','#sb2-charging']]){$(id).checked=state[key];$(id).addEventListener('change',e=>{state[key]=e.target.checked;updateInfo();save()})}
+      root.querySelectorAll('.scene').forEach(b=>b.addEventListener('click',()=>{state.scene=b.dataset.scene;state.variant=0;started=performance.now();updateInfo();render();save()}));
+      updateInfo();render();setInterval(render,100);
+      if(globalThis.Tweak){const tweak=new Tweak({container:$('.settings'),onChange:()=>{for(const [key,id] of [['context','#sb2-context'],['persistent','#sb2-persistent'],['alerts','#sb2-alerts']])$(id).value=state[key];updateInfo();save()}});tweak.addSelect(state,'context',{label:'Preview context',options:[{label:'Home',value:'home'},{label:'In game',value:'game'}]})}
+    })();
+  </script>
+</div>
