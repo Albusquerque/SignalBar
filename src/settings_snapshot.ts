@@ -1,5 +1,6 @@
 import { CONTROLLER_VARIANTS } from "./controller_variants";
 import { EVENT_VARIANTS } from "./event_variants";
+import { WEATHER_VARIANTS } from "./weather_variants";
 import type { Status } from "./types";
 
 export interface SettingsSnapshotSection {
@@ -83,12 +84,22 @@ export function buildSettingsSnapshot(status: Status): SettingsSnapshotSection[]
     {
       title: "Controllers",
       lines: [
-        `Gauge ${status.controller_battery_display === "home" ? "On Home" : status.controller_battery_display === "everywhere" ? "Everywhere" : "Off"} · Brief alerts ${onOff(status.controller_alerts_enabled)} · Where ${alertContext[status.controller_alert_context]}`,
+        `Gauge ${status.controller_battery_display === "home" ? "On Home" : status.controller_battery_display === "game" ? "In game" : status.controller_battery_display === "everywhere" ? "Everywhere" : "Off"} · Brief alerts ${onOff(status.controller_alerts_enabled)} · Where ${alertContext[status.controller_alert_context]}`,
         `Charging ${chargingMode[status.controller_charging_mode]} · Low warning ≤${status.controller_low_threshold}%`,
         `Connect ${onOff(status.controller_connect_enabled)}: ${controller("connect", status.controller_connect_variant)} · Single ${controller("persistent", status.controller_persistent_variant)}`,
         `Low ${onOff(status.controller_low_enabled)}: ${controller("low", status.controller_low_variant)} · Charge style ${controller("charging", status.controller_charging_variant)}`,
         `Two controllers ${controller("duo", status.controller_duo_variant)} · Brightness ${status.controller_gauge_brightness}%`,
         `Colours healthy ${rgbHex(status.controller_colour_normal)} · medium ${rgbHex(status.controller_colour_medium)} · low ${rgbHex(status.controller_colour_low)} · charge ${rgbHex(status.controller_colour_charging)}`,
+      ],
+    },
+    {
+      title: "Weather",
+      lines: [
+        `City ${status.weather_location ? `${status.weather_location.name}, ${status.weather_location.country}` : "none"} · Display ${status.weather_display}`,
+        `SteamOS top bar ${onOff(status.weather_topbar_enabled)} · ${status.weather_temperature_unit === "fahrenheit" ? "Fahrenheit" : "Celsius"} · experimental`,
+        `Weather LED brightness ${status.weather_brightness}% · Faint LED cutoff ${status.weather_shadow_cutoff} (linear RGB)`,
+        ...(["clear_day", "clear_night", "rain", "cloud", "breaks", "breaks_night", "snow", "storm"] as const).map((condition) =>
+          `${condition.replace("_", " ")}: ${WEATHER_VARIANTS[condition][status[`weather_${condition}_variant`]]?.label ?? "unknown"}`),
       ],
     },
     {

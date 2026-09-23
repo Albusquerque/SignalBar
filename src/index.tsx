@@ -1,26 +1,32 @@
 import {
   ButtonItem,
   ColorPickerModal,
+  ConfirmModal,
   DropdownItem,
   PanelSection,
   PanelSectionRow,
   Navigation,
   SidebarNavigation,
   SliderField,
+  TextField,
   showModal,
   ToggleField,
   staticClasses,
 } from "@decky/ui";
-import { definePlugin, routerHook } from "@decky/api";
+import { definePlugin, openFilePicker, routerHook } from "@decky/api";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { TbCubeSpark } from "react-icons/tb";
 
 import {
   exportConfiguration,
+  importConfiguration,
   getArtwork,
   getStatus,
   previewCountdown,
   previewController,
+  previewWeather,
+  resetConfiguration,
+  searchWeatherCities,
   setArtworkSetting,
   setMode,
   setGameDisplay,
@@ -37,7 +43,9 @@ import { EVENT_VARIANTS } from "./event_variants";
 import { hslStringToRgb, performancePreview, rgbToHsl } from "./performance";
 import { startSignalBarRuntime } from "./runtime";
 import { buildSettingsSnapshot } from "./settings_snapshot";
-import type { ArtworkPayload, ArtworkSource, Status } from "./types";
+import { WEATHER_CONDITIONS, WEATHER_VARIANTS } from "./weather_variants";
+import { startWeatherTopBar } from "./weather_topbar";
+import type { ArtworkPayload, ArtworkSource, Status, WeatherCondition, WeatherLocation } from "./types";
 
 const MODE_OPTIONS = [
   { data: "artwork", label: "Artwork" },
@@ -100,7 +108,13 @@ const COUNTDOWN_SCALE_OPTIONS = [
 const CONTROLLER_DISPLAY_OPTIONS = [
   { data: "off", label: "Off" },
   { data: "home", label: "On Home" },
+  { data: "game", label: "In game" },
   { data: "everywhere", label: "Everywhere" },
+];
+const WEATHER_DISPLAY_OPTIONS = CONTROLLER_DISPLAY_OPTIONS;
+const WEATHER_TEMPERATURE_UNITS = [
+  { data: "celsius", label: "Celsius (°C)" },
+  { data: "fahrenheit", label: "Fahrenheit (°F)" },
 ];
 const CONTROLLER_ALERT_OPTIONS = [
   { data: "off", label: "Off" },
@@ -454,7 +468,7 @@ function ControllersPanel({ status, setStatus }: { status: Status; setStatus: (n
         {previewMessage ? <div style={{ marginTop: 6 }}>{previewMessage}</div> : null}
       </div></PanelSectionRow>
       <PanelSectionRow><DropdownItem label="Permanent battery gauge"
-        description="Off by default. On Home can show it outside games; Everywhere can also show it in games. Countdowns and brief alerts take priority."
+        description="On Home by default. In game and Everywhere are also available. Turning this on switches the permanent weather display off. Countdowns and brief alerts take priority."
         rgOptions={CONTROLLER_DISPLAY_OPTIONS} selectedOption={status.controller_battery_display}
         onChange={async (option) => setStatus(await setSetting("controller_battery_display", String(option.data)))} /></PanelSectionRow>
       <PanelSectionRow><ToggleField label="Brief controller alerts"
@@ -534,7 +548,151 @@ function ControllersPanel({ status, setStatus }: { status: Status; setStatus: (n
   </>;
 }
 
-type Page = "quick" | "artwork" | "performance" | "countdown" | "events" | "controllers" | "advanced";
+function WeatherPanel({ status, setStatus }: { status: Status; setStatus: (next: Status) => void }) {
+  const [cityQuery, setCityQuery] = useState("");
+  const [countryQuery, setCountryQuery] = useState("");
+  const [cityResults, setCityResults] = useState<WeatherLocation[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [message, setMessage] = useState("");
+  const [previewCondition, setPreviewCondition] = useState<WeatherCondition>("clear_day");
+  const variantKey = `weather_${previewCondition}_variant` as keyof Status;
+  const selectedVariant = Number(status[variantKey]);
+  const currentLabel = WEATHER_CONDITIONS.find((item) => item.data === status.weather.condition)?.label ?? "Unknown";
+  const findCity = async () => {
+    setSearching(true);
+    setMessage("");
+    try {
+      const city = cityQuery.trim();
+      const country = countryQuery.trim();
+      const response = await searchWeatherCities(country ? `${city}, ${country}` : city);
+      setCityResults(response.results);
+      if (response.error) setMessage(`City search failed: ${response.error}`);
+      else if (!response.results.length) setMessage("No matching city. The country must be its full name or two-letter code; try searching without it too.");
+    } catch (error) {
+      setCityResults([]);
+      setMessage(`City search failed: ${error instanceof Error ? error.message : String(error)}`);
+    } finally { setSearching(false); }
+  };
+  const chooseCity = async (city: WeatherLocation) => {
+    try {
+      setStatus(await setSetting("weather_location", city));
+      setCityResults([]);
+      setCityQuery(city.name);
+      setCountryQuery(city.country);
+      setMessage("City saved. Choose where the weather should appear.");
+    } catch (error) { setMessage(`Could not save city: ${String(error)}`); }
+  };
+  const setDisplay = async (display: string) => {
+    if (display !== "off" && !status.weather_location) {
+      setMessage("Choose a city first. No location is detected automatically.");
+      return;
+    }
+    try {
+      setStatus(await setSetting("weather_display", display));
+      setMessage(display === "off" ? "Weather display off." : "Weather selected. The permanent controller gauge is now off.");
+    } catch (error) { setMessage(`Could not change weather display: ${String(error)}`); }
+  };
+  const playPreview = async (condition: WeatherCondition = previewCondition) => {
+    try {
+      const variant = Number(status[`weather_${condition}_variant`]);
+      const played = await previewWeather(condition, variant);
+      setMessage(played ? "One cycle requested. Preview still follows countdown and Steam LED ownership."
+        : "Preview unavailable in Disabled mode or during the final five minutes of a countdown.");
+      setStatus(await getStatus());
+    } catch (error) { setMessage(`Preview failed: ${String(error)}`); }
+  };
+  return <>
+    <PanelSection title="Local weather">
+      <PanelSectionRow><div style={{ fontSize: ".8em", opacity: .82 }}>
+        {status.weather_location ? `${status.weather_location.name}, ${status.weather_location.country}` : "Choose a city to begin. Location is never detected automatically."}
+        <div style={{ marginTop: 6 }}>
+          {status.weather.phase === "ready"
+            ? `${currentLabel} · updated ${formatAge(status.weather.age_s)}`
+            : status.weather.phase === "loading" ? "Getting current weather…"
+              : status.weather.phase === "error" ? `Weather unavailable: ${status.weather.error}`
+                : status.weather.phase === "waiting" ? "Waiting for the first weather update…"
+              : "Weather is off. The controller gauge is the fresh-install default."}
+        </div>
+        {message ? <div style={{ marginTop: 6 }}>{message}</div> : null}
+      </div></PanelSectionRow>
+      <PanelSectionRow><TextField label="City or postal code" value={cityQuery} onChange={(event) => setCityQuery(event.currentTarget.value)}
+        description="Enter a city name or postal code." /></PanelSectionRow>
+      <PanelSectionRow><TextField label="Country (optional)" value={countryQuery} onChange={(event) => setCountryQuery(event.currentTarget.value)}
+        description="Full name or two-letter code, for example France or FR." /></PanelSectionRow>
+      <PanelSectionRow><ButtonItem label="Find city" disabled={searching || cityQuery.trim().length < 2}
+        onClick={() => void findCity()}>{searching ? "Searching…" : "Search"}</ButtonItem></PanelSectionRow>
+      {cityResults.map((city, index) => <PanelSectionRow key={`${city.latitude}:${city.longitude}:${index}`}>
+        <ButtonItem label={`${city.name}, ${city.country}`} onClick={() => void chooseCity(city)}>Use this city</ButtonItem>
+      </PanelSectionRow>)}
+      {status.weather_location ? <PanelSectionRow><ButtonItem label="Remove city"
+        description="Turns weather off and stops weather requests."
+        onClick={() => void setSetting("weather_location", null).then((next) => { setStatus(next); setMessage("City removed."); }).catch((error) => setMessage(String(error)))}>Remove</ButtonItem></PanelSectionRow> : null}
+      <PanelSectionRow><ToggleField label="SteamOS top-bar weather (experimental)"
+        description="Show a weather icon and temperature beside the clock when Steam's top bar is available. Needs a chosen city. Independent of the LED display and controller gauge; hides if the top bar cannot be found."
+        checked={status.weather_topbar_enabled}
+        onChange={async (enabled) => {
+          if (enabled && !status.weather_location) {
+            setMessage("Choose a city before enabling top-bar weather.");
+            return;
+          }
+          try {
+            setStatus(await setSetting("weather_topbar_enabled", enabled));
+            setMessage(enabled ? "Top-bar weather enabled. It may take a few seconds to appear." : "Top-bar weather disabled.");
+          } catch (error) { setMessage(`Could not change top-bar weather: ${String(error)}`); }
+        }} /></PanelSectionRow>
+      <PanelSectionRow><DropdownItem label="Top-bar temperature unit"
+        description="Applies to the number beside the SteamOS clock only, not the LED animations."
+        rgOptions={WEATHER_TEMPERATURE_UNITS} selectedOption={status.weather_temperature_unit}
+        onChange={async (option) => setStatus(await setSetting("weather_temperature_unit", String(option.data)))} /></PanelSectionRow>
+      <PanelSectionRow><DropdownItem label="Permanent weather display"
+        description="Off until you choose a city. On Home, In game or Everywhere replaces the permanent controller gauge; brief controller alerts and countdowns keep priority."
+        rgOptions={WEATHER_DISPLAY_OPTIONS} selectedOption={status.weather_display}
+        onChange={(option) => void setDisplay(String(option.data))} /></PanelSectionRow>
+      <PanelSectionRow><div style={{ fontSize: ".76em", opacity: .72 }}>
+        Current conditions refresh about every 15 minutes. The last reading can be reused for up to one hour; then weather yields the bar. No city, no network request. Data by <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a>.
+      </div></PanelSectionRow>
+    </PanelSection>
+    <PanelSection title="Weather animations">
+      <PanelSectionRow><DropdownItem label="Condition to configure" rgOptions={WEATHER_CONDITIONS}
+        selectedOption={previewCondition} onChange={(option) => setPreviewCondition(option.data as WeatherCondition)} /></PanelSectionRow>
+      <PanelSectionRow><DropdownItem label="Animation" rgOptions={WEATHER_VARIANTS[previewCondition].map((item, index) => ({ data: index, label: item.label }))}
+        selectedOption={selectedVariant}
+        onChange={async (option) => setStatus(await setSetting(variantKey, Number(option.data)))} /></PanelSectionRow>
+      <PanelSectionRow><div style={{ fontSize: ".78em", opacity: .78 }}>
+        {WEATHER_VARIANTS[previewCondition][selectedVariant]?.detail}
+      </div></PanelSectionRow>
+      <PanelSectionRow><ButtonItem label="Preview this animation"
+        description="Plays one weather cycle with the selected condition, even before you choose a city. This does not test the weather connection."
+        onClick={() => void playPreview()}>Play preview</ButtonItem></PanelSectionRow>
+      <PanelSectionRow><div style={{ width: "100%", fontSize: ".78em", opacity: .8 }}>
+        {status.weather.preview_active ? "Preview playing" : status.weather.active_here ? "Live weather signal available here" : "No weather signal playing here"}
+        <PalettePreview colors={status.weather.colors} />
+      </div></PanelSectionRow>
+    </PanelSection>
+    <PanelSection title="Weather brightness">
+      <PanelSectionRow><div style={{ fontSize: ".78em", opacity: .78 }}>
+        Brightness scales RGB linearly for all weather animations. Use 100% with cutoff 0 for the unprocessed animation. These controls affect Weather only, not Steam's master LED brightness or other SignalBar modes.
+      </div></PanelSectionRow>
+      <PanelSectionRow><SliderField label="Weather LED brightness" min={10} max={100} step={5}
+        showValue valueSuffix="%" value={status.weather_brightness}
+        onChange={async (value) => setStatus(await setSetting("weather_brightness", value))} /></PanelSectionRow>
+      <PanelSectionRow><SliderField label="Turn faint LEDs off" min={0} max={60} step={5}
+        showValue value={status.weather_shadow_cutoff}
+        onChange={async (value) => setStatus(await setSetting("weather_shadow_cutoff", value))} /></PanelSectionRow>
+      <PanelSectionRow><div style={{ fontSize: ".76em", opacity: .72 }}>
+        Cutoff turns a pixel fully off when its strongest RGB channel is at or below this value (0–255 scale). It does not dim the remaining pixels further. A high cutoff can make transitions more abrupt. These are brightness controls, not measured hardware colour calibration.
+      </div></PanelSectionRow>
+      <PanelSectionRow><ButtonItem label="Preview night colours"
+        description="Play the selected moon-and-stars loop to check the white glow on the physical bar."
+        onClick={() => void playPreview("clear_night")}>Play night</ButtonItem></PanelSectionRow>
+      <PanelSectionRow><ButtonItem label="Preview warm colours"
+        description="Play the selected clear-day loop to check gold and pale sunlight."
+        onClick={() => void playPreview("clear_day")}>Play daylight</ButtonItem></PanelSectionRow>
+    </PanelSection>
+  </>;
+}
+
+type Page = "quick" | "artwork" | "performance" | "countdown" | "events" | "controllers" | "weather" | "advanced";
 
 function Content({ page = "quick" }: { page?: Page }) {
   const [status, setStatusState] = useState<Status | null>(null);
@@ -544,6 +702,8 @@ function Content({ page = "quick" }: { page?: Page }) {
   const [showDebug, setShowDebug] = useState(false);
   const [configurationExportPath, setConfigurationExportPath] = useState("");
   const [configurationExportError, setConfigurationExportError] = useState("");
+  const [configurationActionMessage, setConfigurationActionMessage] = useState("");
+  const [configurationBusy, setConfigurationBusy] = useState(false);
   const manualTimer = useRef<number | null>(null);
   const setStatus = (next: Status) => {
     setStatusState(next);
@@ -554,7 +714,7 @@ function Content({ page = "quick" }: { page?: Page }) {
     void getStatus().then((next) => alive && setStatus(next)).catch(console.warn);
     const timer = window.setInterval(() => {
       void getStatus().then((next) => alive && setStatus(next)).catch(() => undefined);
-    }, page === "events" || page === "controllers" ? 180 : 1000);
+    }, page === "events" || page === "controllers" || page === "weather" ? 180 : 1000);
     return () => {
       alive = false;
       window.clearInterval(timer);
@@ -594,6 +754,67 @@ function Content({ page = "quick" }: { page?: Page }) {
     );
     if (request === artworkRequest.current) setStatus(next);
   }, []);
+
+  const refreshArtworkAfterConfiguration = (next: Status) => {
+    setHeroRequestKey("");
+    if (next.game.appid > 0) {
+      void loadAndSampleArtwork(next.game.appid, next.artwork_source).catch(console.warn);
+    }
+  };
+
+  const importSelectedConfiguration = async (path: string) => {
+    setConfigurationBusy(true);
+    setConfigurationActionMessage("");
+    try {
+      const next = await importConfiguration(path);
+      setStatus(next);
+      refreshArtworkAfterConfiguration(next);
+      setConfigurationActionMessage(`Imported ${path}. Saved settings and game profiles replaced.`);
+    } catch (error) {
+      setConfigurationActionMessage(`Import failed; saved settings were kept. ${String(error)}`);
+    } finally {
+      setConfigurationBusy(false);
+    }
+  };
+
+  const chooseConfigurationFile = async () => {
+    try {
+      const selected = await openFilePicker(0, "/home/deck/Documents", true, false,
+        undefined, ["json"]);
+      const path = selected?.realpath || selected?.path;
+      if (!path) return;
+      let modal: ReturnType<typeof showModal> | undefined;
+      modal = showModal(<ConfirmModal strTitle="Import SignalBar configuration?"
+        strDescription="This replaces every saved setting and per-game profile. The personal timer stops."
+        strOKButtonText="Import" strCancelButtonText="Cancel"
+        onCancel={() => modal?.Close()}
+        onOK={() => { modal?.Close(); void importSelectedConfiguration(path); }} />);
+    } catch (error) {
+      if (!String(error).toLowerCase().includes("cancel")) {
+        setConfigurationActionMessage(`Could not open configuration picker: ${String(error)}`);
+      }
+    }
+  };
+
+  const confirmConfigurationReset = () => {
+    let modal: ReturnType<typeof showModal> | undefined;
+    modal = showModal(<ConfirmModal strTitle="Reset SignalBar settings?"
+      strDescription="All saved settings and per-game profiles will return to the shipped defaults. The personal timer stops. Export a JSON backup first if you want to restore them later."
+      strOKButtonText="Reset settings" strCancelButtonText="Cancel" bDestructiveWarning
+      onCancel={() => modal?.Close()}
+      onOK={() => {
+        modal?.Close();
+        setConfigurationBusy(true);
+        setConfigurationActionMessage("");
+        void resetConfiguration().then((next) => {
+          setStatus(next);
+          refreshArtworkAfterConfiguration(next);
+          setConfigurationActionMessage("Settings and per-game profiles reset to SignalBar defaults.");
+        }).catch((error) => {
+          setConfigurationActionMessage(`Reset failed: ${String(error)}`);
+        }).finally(() => setConfigurationBusy(false));
+      }} />);
+  };
 
   useEffect(() => {
     if (!status) return;
@@ -651,6 +872,7 @@ function Content({ page = "quick" }: { page?: Page }) {
   const baseShownColors = status.provider.startsWith("event:") ? status.events.colors
     : status.provider.startsWith("controller:") || status.provider.startsWith("controller-") ? status.controllers.colors
     : status.provider === "countdown" ? status.countdown.colors
+      : status.provider.startsWith("weather") ? status.weather.colors
       : status.provider.startsWith("artwork") ? artColors
         : status.provider.startsWith("performance") ? performanceColors : [];
   const shownColors = status.provider.endsWith("+recording")
@@ -660,6 +882,7 @@ function Content({ page = "quick" }: { page?: Page }) {
       : status.provider === "controller-battery" ? "Controller battery"
       : status.provider === "controller-charging" ? "Controller charging"
       : status.provider === "controller-charge-complete" ? "Controller fully charged"
+      : status.provider.startsWith("weather") ? `Weather · ${status.weather.location?.name ?? "preview"}`
     : status.provider === "countdown" ? status.countdown.label
       : status.provider === "valve" ? "Steam / another app"
         : status.provider === "none" ? "No SignalBar output" : status.provider;
@@ -711,11 +934,14 @@ function Content({ page = "quick" }: { page?: Page }) {
               {status.controllers.controllers.map((controller) =>
                 `${controller.name} ${controllerChargeLabel(controller)}`).join(" · ")}
             </div> : null}
-            {status.mode === "performance" ? <div style={{ marginTop: 7 }}>
+            {status.provider.startsWith("weather") ? <div style={{ marginTop: 5 }}>
+              {WEATHER_CONDITIONS.find((item) => item.data === status.weather.condition)?.label ?? "Current weather"}
+            </div> : null}
+            {status.provider.startsWith("performance") ? <div style={{ marginTop: 7 }}>
               <div style={{ marginBottom: 4, fontSize: ".92em", opacity: .72 }}>Performance sensors</div>
               <PerformanceReadout status={status} />
             </div> : null}
-            {status.mode === "artwork" && status.game.appid > 0 ? <div style={{ marginTop: 8 }}>
+            {status.provider.startsWith("artwork") && status.game.appid > 0 ? <div style={{ marginTop: 8 }}>
               <div style={{ marginBottom: 6, opacity: .76 }}>
                 Game artwork{currentArtwork?.source_label ? ` · ${currentArtwork.source_label}` : ""}
               </div>
@@ -724,7 +950,7 @@ function Content({ page = "quick" }: { page?: Page }) {
             </div> : null}
             <PalettePreview colors={shownColors} />
             <div style={{ opacity: .65 }}>17-LED logical preview</div>
-            <div style={{ opacity: .72 }}>Family countdown takes priority. Short light events temporarily replace Artwork or Performance, then the selected display returns.</div>
+            <div style={{ opacity: .72 }}>Family countdown takes priority. Short alerts temporarily replace the selected permanent display, then it returns.</div>
           </div>
         </PanelSectionRow>
         <PanelSectionRow>
@@ -921,6 +1147,8 @@ function Content({ page = "quick" }: { page?: Page }) {
 
       {page === "controllers" ? <ControllersPanel status={status} setStatus={setStatus} /> : null}
 
+      {page === "weather" ? <WeatherPanel status={status} setStatus={setStatus} /> : null}
+
       {page === "advanced" ? <PanelSection title="Advanced / debug">
         <PanelSectionRow>
           <ToggleField
@@ -965,6 +1193,17 @@ function Content({ page = "quick" }: { page?: Page }) {
                 Export failed: {configurationExportError}
               </div>
             </PanelSectionRow> : null}
+            <PanelSectionRow><ButtonItem label="Import configuration JSON"
+              description="Choose a SignalBar export from Documents or another location. Replaces saved settings and per-game profiles."
+              disabled={configurationBusy} onClick={() => void chooseConfigurationFile()}>Import JSON</ButtonItem></PanelSectionRow>
+            <PanelSectionRow><ButtonItem label="Reset to defaults"
+              description="Return to the shipped settings, clear per-game profiles and stop the personal timer. Confirmation required."
+              disabled={configurationBusy} onClick={confirmConfigurationReset}>Reset</ButtonItem></PanelSectionRow>
+            {configurationActionMessage ? <PanelSectionRow>
+              <div style={{ width: "100%", fontSize: ".76em", overflowWrap: "anywhere" }}>
+                {configurationActionMessage}
+              </div>
+            </PanelSectionRow> : null}
             <PanelSectionRow>
               <div style={{ width: "100%", fontSize: ".76em", opacity: 0.78, overflowWrap: "anywhere" }}>
                 <div>LED path: {status.debug.led_path}</div>
@@ -996,6 +1235,10 @@ function Content({ page = "quick" }: { page?: Page }) {
                   {status.debug.controller_last_update_age_s == null
                     ? " · no reading yet"
                     : ` · ${formatAge(status.debug.controller_last_update_age_s)}`}
+                </div>
+                <div>Weather: {status.weather.phase} · {status.weather.location?.name ?? "no city"}
+                  {status.weather.age_s == null ? "" : ` · updated ${formatAge(status.weather.age_s)}`}
+                  {status.weather.error ? ` · ${status.weather.error}` : ""}
                 </div>
                 <div>
                   SteamInputManager: {status.debug.controller_telemetry?.phase ?? "starting"}
@@ -1049,6 +1292,7 @@ function SignalBarSettings() {
     { title: "Playtime", route: "/signalbar/settings/countdown", content: <Content page="countdown" /> },
     { title: "Light events", route: "/signalbar/settings/events", content: <Content page="events" /> },
     { title: "Controllers", route: "/signalbar/settings/controllers", content: <Content page="controllers" /> },
+    { title: "Weather", route: "/signalbar/settings/weather", content: <Content page="weather" /> },
     "separator",
     { title: "Advanced / debug", route: "/signalbar/settings/advanced", content: <Content page="advanced" /> },
   ]} />;
@@ -1058,6 +1302,7 @@ export default definePlugin(() => {
   // Decky invokes this initializer once when it loads the frontend bundle.
   // Runtime signals must start here, not when the user first opens the panel.
   const runtime = startSignalBarRuntime();
+  const weatherTopBar = startWeatherTopBar();
   routerHook.addRoute("/signalbar/settings", SignalBarSettings);
   return {
     name: "SignalBar",
@@ -1067,6 +1312,7 @@ export default definePlugin(() => {
     alwaysRender: true,
     onDismount() {
       runtime.stop();
+      weatherTopBar.stop();
       routerHook.removeRoute("/signalbar/settings");
     },
   };

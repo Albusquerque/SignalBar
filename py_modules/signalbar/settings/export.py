@@ -10,6 +10,7 @@ from pathlib import Path
 
 
 EXPORT_FILENAME = "SignalBar-configuration.json"
+MAX_IMPORT_BYTES = 1024 * 1024
 
 
 def configuration_export_path(settings_directory: str, user_home: str | None = None) -> Path:
@@ -62,6 +63,42 @@ def build_configuration_export(settings, version: str, current_game=None, genera
             "current_game": game,
         },
     }
+
+
+def read_configuration_import(path: str):
+    """Read a user-selected export, never executable settings or runtime state."""
+    target = Path(path).expanduser()
+    if not target.is_absolute() or target.suffix.lower() != ".json":
+        raise ValueError("Choose an absolute .json configuration file")
+    try:
+        size = target.stat().st_size
+    except OSError as error:
+        raise ValueError("Configuration file cannot be read") from error
+    if not target.is_file() or not 0 < size <= MAX_IMPORT_BYTES:
+        raise ValueError("Configuration must be a non-empty JSON file under 1 MB")
+    try:
+        with target.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError("Configuration is not readable JSON") from error
+    if not isinstance(payload, dict) or type(payload.get("schema_version")) is not int \
+            or payload["schema_version"] != 1:
+        raise ValueError("Unsupported SignalBar configuration schema")
+    configuration = payload.get("configuration")
+    if not isinstance(configuration, dict):
+        raise ValueError("Configuration section is missing")
+    global_values = configuration.get("global")
+    profiles = configuration.get("profiles")
+    if not isinstance(global_values, dict) or not isinstance(profiles, dict):
+        raise ValueError("Global settings or game profiles are missing")
+    display = profiles.get("display_by_appid")
+    artwork = profiles.get("artwork_by_appid")
+    if not isinstance(display, dict) or not isinstance(artwork, dict):
+        raise ValueError("Game profiles must be objects")
+    if len(display) > 512 or len(artwork) > 512:
+        raise ValueError("Too many game profiles in configuration")
+    # current_game, version and export date are informational, not settings.
+    return global_values, display, artwork
 
 
 def write_configuration_export(settings, path: Path, version: str, current_game=None):

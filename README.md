@@ -6,7 +6,7 @@ Make your Steam Machine's 17-pixel light bar useful and a little more
 expressive. Choose a persistent display, then let playtime warnings and short
 Steam moments take the stage before your display returns.
 
-[Download SignalBar v0.5.1](https://github.com/Albusquerque/SignalBar/releases/tag/v0.5.1)
+[Download SignalBar v0.6.0](https://github.com/Albusquerque/SignalBar/releases/tag/v0.6.0)
 
 [Try the interactive SignalBar preview before installing](https://albusquerque.github.io/signalbar-concept/)
 
@@ -68,6 +68,28 @@ signal appears. The GIF shows the two-controller gauge and continuous charging.
 Battery and charging data depend on the controller. Unknown levels are never
 invented; see the [controller test notes](docs/CONTROLLERS_RESEARCH.md).
 
+### Weather
+
+Choose a city to give the light bar a living weather scene on Home, in games,
+or everywhere. Sixteen selectable loops cover clear skies, rain, cloud,
+partly cloudy day and night, snow, and storms. **Snow takes hold** is the
+default snow scene; all animations can be previewed without network access.
+
+![Weather animations on the Steam Machine light bar](assets/readme-gifs/weather.gif)
+
+An optional, experimental weather icon and temperature can also appear beside
+the SteamOS clock. Choose °C or °F for the top-bar number. This works
+independently of the LED weather scene and has been confirmed on one Steam
+Machine; Steam UI updates could change its placement. No temperature colours
+are mapped to LEDs.
+
+<img src="assets/weather-topbar-photo-large.png" alt="Weather icon and temperature beside the SteamOS clock on a real Steam Machine" width="700">
+
+Select a city before enabling live weather. SignalBar fetches current
+conditions from Open-Meteo about every 15 minutes, without an API key or
+automatic location detection. Weather and the permanent controller gauge are
+mutually exclusive; the controller gauge remains the fresh-install default.
+
 ## Light events
 
 Light events briefly replace the current display, play their animation, then
@@ -89,8 +111,7 @@ An icy shutter closes, followed by two flashes with expanding echoes.
 
 ### Achievement
 
-Chromatic rebound is the fresh-install choice. The GIF below shows the
-alternative Constellation round trip style.
+Constellation round trip is the fresh-install choice. The GIF below shows it.
 
 ![Constellation achievement animation](assets/readme-gifs/achievement.gif)
 
@@ -116,15 +137,17 @@ SignalBar follows a strict order:
 5. Low-battery alerts can interrupt other short events; connection and charging
    alerts do not interrupt an active Steam light event.
 6. Steam Families and personal countdowns replace the selected base display.
-7. The optional controller gauge replaces the base display in its selected
-   context; otherwise Artwork or Performance provides it.
+7. The optional controller gauge or Weather replaces the base display in its
+   selected context; otherwise Artwork or Performance provides it.
 
 ## Install
 
 ### Decky Loader
 
 1. Install [Decky Loader](https://decky.xyz/) and enable Developer Mode.
-2. Download `SignalBar-v0.5.1.zip` from the release linked above. Do not extract it.
+2. Download `SignalBar-v0.6.0.zip` from the
+   [v0.6.0 release](https://github.com/Albusquerque/SignalBar/releases/tag/v0.6.0).
+   Do not extract it.
 3. Open **Decky Settings > Developer > Install Plugin from ZIP**.
 4. Select the downloaded archive.
 5. Restart Decky Loader if SignalBar does not appear immediately.
@@ -142,7 +165,7 @@ light bar through root-owned `valve-leds` sysfs files.
 1. Open SignalBar in Decky's quick-access menu.
 2. Choose **Artwork**, **Performance**, or **Disabled**.
 3. Open **Detailed settings** for Artwork, Performance, Playtime, Light events,
-   Controllers, and Advanced options.
+   Controllers, Weather, and Advanced options.
 4. Use Preview to compare animations before changing your live settings.
 
 Live Light events are enabled on a fresh installation. Controller alerts have
@@ -200,6 +223,14 @@ The gauge takes the place of Artwork or Performance where selected; it does
 not combine their colours. A Steam Families countdown still wins. Unknown or
 coarse battery data is not displayed as an exact percentage.
 
+### Weather
+
+- Location selected manually by city or postal code; no automatic geolocation
+- On Home, In game, or Everywhere, with sixteen selectable 17-LED animations
+- Independent optional SteamOS top-bar icon and °C/°F temperature
+- Weather brightness and faint-pixel cutoff for the physical diffuser
+- Weather previews work without a city or network connection
+
 ### Optical calibration
 
 The physical diffuser can make a lit LED bleed into a neighbouring dark space.
@@ -210,7 +241,7 @@ default is two.
 The official Steam Machine's physical LED order is reversed by default while
 the Decky preview remains left to right.
 
-### Configuration export
+### Configuration backup and reset
 
 Open **Advanced / debug > Show debug details** and choose **Export configuration
 JSON**. SignalBar writes a readable snapshot of global settings, saved per-game
@@ -219,9 +250,17 @@ profiles, and the current game's resolved choices to
 The panel always shows the exact path used. Exporting again replaces only that
 file, and controller device IDs are never included.
 
+In the same Debug section, **Import configuration JSON** opens a file picker
+and asks for confirmation before replacing saved global settings and per-game
+profiles. Unsupported or invalid files leave the existing configuration
+untouched. **Reset to defaults** asks for confirmation, clears per-game
+profiles, and restores the shipped defaults. Neither action deletes the
+exported JSON or the artwork cache; both stop a running personal timer.
+
 ## Safety and privacy
 
-- No telemetry, cloud service, account login, or runtime network request
+- No telemetry or cloud account login. Weather city search requests and live
+  Open-Meteo requests occur only when you use the optional Weather feature.
 - No SteamOS read-only filesystem modification
 - Local read-only discovery of Steam and custom-grid artwork
 - Serialized and rate-limited hardware writes
@@ -255,7 +294,7 @@ npm run build
 npm run package
 ```
 
-The installable archive is written to `out/SignalBar-v0.5.1.zip`.
+The installable archive is written to `out/SignalBar-v0.6.0.zip`.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for provider, arbitration, guard, and
 hardware-rendering details. Release history is available in

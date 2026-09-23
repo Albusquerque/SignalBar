@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import threading
+from copy import deepcopy
 
 DEFAULTS = {
     "mode": "performance",
@@ -12,7 +14,7 @@ DEFAULTS = {
     # Retained only to migrate v0.1/v0.2 Automatic configurations.
     "performance_enabled": True,
     "performance_metric": "mixed",
-    "performance_smoothing": "balanced",
+    "performance_smoothing": "responsive",
     "performance_always": True,
     "mixed_direction": "mirrored",
     "temperature_palette": "classic",
@@ -40,7 +42,7 @@ DEFAULTS = {
     # Optional optical separation for the persistent red recording marker.
     "recording_marker_isolation": True,
     "event_notification_variant": "notification-beacon",
-    "event_achievement_variant": "achievement-rebound",
+    "event_achievement_variant": "achievement-constellation",
     "event_screenshot_variant": "screenshot-bloom",
     "controller_battery_display": "home",
     # Charging choices are exclusive; legacy display/enabled keys are derived
@@ -51,7 +53,7 @@ DEFAULTS = {
     "controller_alerts_enabled": True,
     "controller_connect_enabled": True,
     "controller_low_enabled": True,
-    "controller_charging_enabled": True,
+    "controller_charging_enabled": False,
     "controller_low_threshold": 20,
     "controller_connect_variant": "welcome",
     "controller_persistent_variant": "tip",
@@ -63,6 +65,21 @@ DEFAULTS = {
     "controller_colour_low": [220, 12, 24],
     "controller_colour_charging": [0, 145, 220],
     "controller_gauge_brightness": 65,
+    "weather_display": "off",
+    "weather_location": None,
+    "weather_topbar_enabled": False,
+    "weather_temperature_unit": "celsius",
+    "weather_brightness": 100,
+    "weather_shadow_cutoff": 0,
+    "weather_sequence_revision": 10,
+    "weather_clear_day_variant": 0,
+    "weather_clear_night_variant": 0,
+    "weather_rain_variant": 0,
+    "weather_cloud_variant": 1,
+    "weather_breaks_variant": 0,
+    "weather_breaks_night_variant": 0,
+    "weather_snow_variant": 1,
+    "weather_storm_variant": 0,
     "guard_cooldown_s": 5.0,
     "guard_stable_s": 2.0,
 }
@@ -96,6 +113,25 @@ CONTROLLER_VARIANTS = {
     "controller_charging_variant": {"current", "breath", "spark"},
     "controller_duo_variant": {"twin", "focus", "double-welcome"},
 }
+WEATHER_VARIANT_KEYS = tuple(key for key in DEFAULTS if key.startswith("weather_") and key.endswith("_variant"))
+WEATHER_VARIANT_COUNTS = {"clear_day": 2, "clear_night": 2, "rain": 2, "cloud": 2,
+                          "breaks": 2, "breaks_night": 2, "snow": 2, "storm": 2}
+
+
+def _valid_weather_location(value):
+    if not isinstance(value, dict):
+        return None
+    try:
+        latitude = float(value["latitude"])
+        longitude = float(value["longitude"])
+        name = str(value["name"]).strip()[:80]
+        country = str(value.get("country", "")).strip()[:80]
+        if (not name or not math.isfinite(latitude) or not math.isfinite(longitude)
+                or not -90 <= latitude <= 90 or not -180 <= longitude <= 180):
+            return None
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return None
+    return {"name": name, "country": country, "latitude": latitude, "longitude": longitude}
 
 
 class SettingsStore:
@@ -114,6 +150,16 @@ class SettingsStore:
                     for key in DEFAULTS:
                         if key in raw:
                             self._data[key] = raw[key]
+                    if raw.get("weather_sequence_revision") != 10:
+                        migration = {
+                            "clear_night": {0: 0, 3: 1},
+                            "rain": {2: 0, 3: 1},
+                            "storm": {3: 0, 4: 1},
+                        }
+                        for condition, variants in migration.items():
+                            key = f"weather_{condition}_variant"
+                            self._data[key] = variants.get(raw.get(key), 0)
+                        self._data["weather_sequence_revision"] = 10
                     if "controller_charging_mode" not in raw:
                         display = raw.get("controller_charging_display")
                         if display == "home":
@@ -188,8 +234,35 @@ class SettingsStore:
             if not isinstance(self._data[key], str) or self._data[key] not in choices:
                 self._data[key] = DEFAULTS[key]
         if (not isinstance(self._data["controller_battery_display"], str)
-                or self._data["controller_battery_display"] not in {"off", "home", "everywhere"}):
+                or self._data["controller_battery_display"] not in {"off", "home", "game", "everywhere"}):
             self._data["controller_battery_display"] = DEFAULTS["controller_battery_display"]
+        if self._data["weather_display"] not in {"off", "home", "game", "everywhere"}:
+            self._data["weather_display"] = DEFAULTS["weather_display"]
+        if not isinstance(self._data["weather_topbar_enabled"], bool):
+            self._data["weather_topbar_enabled"] = False
+        if self._data["weather_temperature_unit"] not in {"celsius", "fahrenheit"}:
+            self._data["weather_temperature_unit"] = DEFAULTS["weather_temperature_unit"]
+        self._data["weather_location"] = _valid_weather_location(self._data["weather_location"])
+        if self._data["weather_location"] is None:
+            self._data["weather_display"] = "off"
+            self._data["weather_topbar_enabled"] = False
+        for key, lower, upper in (("weather_brightness", 10, 100), ("weather_shadow_cutoff", 0, 60)):
+            try:
+                self._data[key] = max(lower, min(upper, int(round(float(self._data[key])))))
+            except (TypeError, ValueError, OverflowError):
+                self._data[key] = DEFAULTS[key]
+        self._data["weather_sequence_revision"] = 10
+        for key in WEATHER_VARIANT_KEYS:
+            try:
+                value = int(self._data[key])
+                condition = key.removeprefix("weather_").removesuffix("_variant")
+                count = WEATHER_VARIANT_COUNTS[condition]
+                self._data[key] = value if 0 <= value < count else DEFAULTS[key]
+            except (TypeError, ValueError, OverflowError):
+                self._data[key] = DEFAULTS[key]
+        # Corrupt or hand-edited configurations keep the older controller default.
+        if self._data["weather_display"] != "off" and self._data["controller_battery_display"] != "off":
+            self._data["weather_display"] = "off"
         charging_mode = self._data["controller_charging_mode"]
         if not isinstance(charging_mode, str) or charging_mode not in {
             "off", "brief", "continuous-home", "continuous-everywhere"
@@ -265,12 +338,54 @@ class SettingsStore:
 
     def update(self, changes: dict):
         with self._lock:
+            if ((changes.get("weather_display") not in (None, "off") or changes.get("weather_topbar_enabled") is True)
+                    and _valid_weather_location(changes.get("weather_location", self._data["weather_location"])) is None):
+                raise ValueError("Choose a weather city before enabling weather")
             for key, value in changes.items():
                 if key in DEFAULTS:
                     self._data[key] = value
+            if changes.get("weather_display") in {"home", "game", "everywhere"}:
+                self._data["controller_battery_display"] = "off"
+            elif changes.get("controller_battery_display") in {"home", "game", "everywhere"}:
+                self._data["weather_display"] = "off"
             self._validate()
             self.save()
             return dict(self._data)
+
+    def replace_configuration(self, global_values: dict, display_profiles: dict,
+                              artwork_profiles: dict):
+        """Atomically replace saved choices; malformed imports leave them intact."""
+        if not isinstance(global_values, dict) or not isinstance(display_profiles, dict) \
+                or not isinstance(artwork_profiles, dict):
+            raise ValueError("Configuration sections must be objects")
+        unsupported = set(global_values) - set(DEFAULTS) - {"display_profiles", "artwork_profiles"}
+        if unsupported or "display_profiles" in global_values or "artwork_profiles" in global_values:
+            raise ValueError("Configuration contains unsupported settings")
+        imported = deepcopy(global_values)
+        imported["display_profiles"] = deepcopy(display_profiles)
+        imported["artwork_profiles"] = deepcopy(artwork_profiles)
+        with self._lock:
+            previous = self._data
+            try:
+                self._data = deepcopy(DEFAULTS)
+                self._data.update(imported)
+                self._validate()
+                # Reject invalid values rather than silently changing a user
+                # selected import. Derived compatibility fields are expected
+                # to be normalized from controller_charging_mode.
+                derived = {"controller_charging_enabled", "controller_charging_display",
+                           "weather_sequence_revision"}
+                for key, value in imported.items():
+                    if key not in derived and self._data[key] != value:
+                        raise ValueError(f"Invalid configuration setting: {key}")
+                self.save()
+            except Exception:
+                self._data = previous
+                raise
+            return dict(self._data)
+
+    def reset_configuration(self):
+        return self.replace_configuration({}, {}, {})
 
     def artwork_for(self, appid=0):
         with self._lock:

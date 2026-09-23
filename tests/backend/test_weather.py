@@ -1,0 +1,232 @@
+"""Beta.10 weather loops, persistence, service and priority contracts."""
+
+import io
+import json
+import ssl
+import tempfile
+import time
+import unittest
+from pathlib import Path
+from unittest.mock import patch, sentinel
+from urllib.error import URLError
+
+import signalbar.providers.weather as weather_module
+from signalbar.arbiter import Arbiter
+from signalbar.backend import Engine
+from signalbar.models import GameState, ProviderOutput, normalize_frame
+from signalbar.providers.weather import (
+    CONDITIONS, VARIANT_NAMES, WeatherProvider, condition_for_code,
+    dim_weather_pixel, fetch_current, search_cities, weather_frame,
+)
+from signalbar.providers.weather_sequences import weather_sequence
+from signalbar.settings import SettingsStore
+from signalbar.settings.store import DEFAULTS, WEATHER_VARIANT_COUNTS
+
+CITY = {"name": "Paris", "country": "France", "latitude": 48.85, "longitude": 2.35}
+SAMPLE = {"weather_code": 2, "is_day": True, "condition": "breaks", "observed_at": "2026-09-23T10:00"}
+
+
+class WeatherTests(unittest.TestCase):
+    def test_variant_catalogue_and_frame_bounds(self):
+        self.assertEqual({key: len(names) for key, names in VARIANT_NAMES.items()}, WEATHER_VARIANT_COUNTS)
+        self.assertEqual(set(CONDITIONS), set(VARIANT_NAMES))
+        raw = dict(DEFAULTS, weather_brightness=100, weather_shadow_cutoff=0)
+        for condition in CONDITIONS:
+            for variant in range(len(VARIANT_NAMES[condition])):
+                unique = set()
+                for tick in range(80):
+                    elapsed = tick / 10
+                    frame = weather_frame(condition, variant, elapsed, raw)
+                    self.assertEqual(len(frame), 17)
+                    self.assertTrue(all(0 <= channel <= 255 for pixel in frame for channel in pixel))
+                    self.assertEqual(frame, normalize_frame(weather_sequence(condition, variant, elapsed)))
+                    unique.add(frame)
+                self.assertGreater(len(unique), 4, (condition, variant))
+                self.assertEqual(weather_frame(condition, variant, 0, raw),
+                                 weather_frame(condition, variant, 8, raw))
+        with self.assertRaises(ValueError):
+            weather_frame("rain", 2, 0, raw)
+
+    def test_partly_cloudy_originals_remain_and_new_clouds_fade_to_black(self):
+        self.assertEqual(len(VARIANT_NAMES["breaks"]), 2)
+        self.assertEqual(len(VARIANT_NAMES["breaks_night"]), 2)
+        for condition in ("breaks", "breaks_night"):
+            self.assertEqual(weather_sequence(condition, 0, 0),
+                             weather_sequence(condition, 1, 0))
+            original = weather_sequence(condition, 0, 3)
+            fading = weather_sequence(condition, 1, 3)
+            for edge in (0, 1, 2, 14, 15, 16):
+                self.assertGreater(original[edge][0], 50)
+                self.assertEqual(fading[edge], [0, 0, 0])
+            self.assertGreater(fading[8][0], 200)
+            for variant in (0, 1):
+                for tick in range(80):
+                    for red, green, blue in weather_sequence(condition, variant, tick / 10):
+                        if red == green == blue:
+                            continue  # Clouds have only neutral-white or black pixels.
+                        self.assertGreaterEqual(red, 165)  # No dim warm/brown fringe.
+                        self.assertGreaterEqual(green / red, .95)
+                        self.assertGreaterEqual(blue, 30)
+            for variant in (0, 1):
+                for tick in range(80):
+                    for red, green, blue in weather_frame(condition, variant, tick / 10, DEFAULTS):
+                        if red != green or green != blue:
+                            self.assertGreaterEqual(green / red, .95)
+        with tempfile.TemporaryDirectory() as folder:
+            store = SettingsStore(str(Path(folder) / "settings.json"))
+            store.update({"weather_breaks_variant": 1, "weather_breaks_night_variant": 1})
+            reloaded = SettingsStore(str(Path(folder) / "settings.json")).all()
+            self.assertEqual(reloaded["weather_breaks_variant"], 1)
+            self.assertEqual(reloaded["weather_breaks_night_variant"], 1)
+
+    def test_snow_takes_hold_is_available_and_default(self):
+        self.assertEqual(VARIANT_NAMES["snow"], ("Melting snowfall", "Snow takes hold"))
+        self.assertEqual(DEFAULTS["weather_snow_variant"], 1)
+        self.assertTrue(all(pixel == [0, 0, 0] for pixel in weather_sequence("snow", 1, 0)))
+        self.assertTrue(all(pixel[0] > 150 for pixel in weather_sequence("snow", 1, 7.1)))
+        self.assertNotEqual(weather_sequence("snow", 0, 3), weather_sequence("snow", 1, 3))
+
+    def test_topbar_temperature_unit_retained_but_led_temperature_fields_removed(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "settings.json"
+            old = {"weather_temperature_unit": "fahrenheit", "weather_soft_halos": True,
+                   "weather_tip_width": 2, "weather_colour_hot": [255, 0, 0],
+                   "weather_temperature_display": "thermometer", "weather_location": CITY,
+                   "weather_display": "home", "weather_rain_variant": 3,
+                   "weather_clear_night_variant": 3, "weather_storm_variant": 4}
+            path.write_text(json.dumps(old), encoding="utf-8")
+            store = SettingsStore(str(path))
+            values = store.all()
+            for field in ("weather_soft_halos", "weather_tip_width",
+                          "weather_colour_hot", "weather_temperature_display"):
+                self.assertNotIn(field, values)
+            self.assertEqual(values["weather_temperature_unit"], "fahrenheit")
+            self.assertEqual(values["weather_rain_variant"], 1)
+            self.assertEqual(values["weather_clear_night_variant"], 1)
+            self.assertEqual(values["weather_storm_variant"], 1)
+            store.update({"weather_brightness": 60})
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["weather_sequence_revision"], 10)
+            self.assertEqual(saved["weather_temperature_unit"], "fahrenheit")
+            self.assertEqual(SettingsStore(str(path)).all()["weather_rain_variant"], 1)
+
+    def test_service_parses_temperature_for_optional_top_bar_only(self):
+        requested = []
+        sample = fetch_current(CITY, lambda url: (
+            requested.append(url), {"current": {"weather_code": 95, "is_day": 0,
+                                                  "temperature_2m": 12.4,
+                                                  "time": "2026-09-23T10:00"}})[1])
+        self.assertEqual(sample["condition"], "storm")
+        self.assertIn("temperature_2m", requested[0])
+        self.assertEqual(sample["temperature_c"], 12.4)
+        no_temp = fetch_current(CITY, lambda url: {"current": {"weather_code": 0, "is_day": 1}})
+        self.assertIsNone(no_temp["temperature_c"])
+        self.assertEqual(condition_for_code(2, 0), "breaks_night")
+        self.assertEqual(condition_for_code(2, 1), "breaks")
+        self.assertEqual(condition_for_code(75, 1), "snow")
+        self.assertEqual(search_cities("Paris", lambda url: {"results": [CITY]}), [CITY])
+
+    def test_tls_failure_retries_with_verified_system_ca_bundle(self):
+        missing_issuer = URLError(ssl.SSLCertVerificationError("missing issuer"))
+        with patch.object(weather_module, "SYSTEM_CA_BUNDLES", ("/etc/ssl/cert.pem",)), \
+                patch.object(weather_module.os.path, "isfile", return_value=True), \
+                patch.object(weather_module.ssl, "create_default_context", return_value=sentinel.verified) as context, \
+                patch.object(weather_module, "urlopen", side_effect=[missing_issuer, io.BytesIO(b'{"results": []}')]) as opener:
+            self.assertEqual(weather_module._read_json("https://example.org"), {"results": []})
+            context.assert_called_once_with(cafile="/etc/ssl/cert.pem")
+            self.assertEqual(opener.call_args.kwargs["context"], sentinel.verified)
+
+    def test_brightness_cutoff_and_neutral_palettes(self):
+        self.assertEqual(dim_weather_pixel((200, 100, 40), 65, 25), (130, 65, 26))
+        self.assertEqual(dim_weather_pixel((25, 12, 3), 100, 25), (0, 0, 0))
+        values = dict(DEFAULTS, weather_brightness=100, weather_shadow_cutoff=0)
+        for tick in range(80):
+            t = tick / 10
+            for variant in (0, 1):
+                for red, green, blue in weather_frame("clear_day", variant, t, values):
+                    self.assertGreaterEqual(red, green)
+                    self.assertGreaterEqual(green, blue)
+            for condition in ("clear_night", "cloud", "snow", "storm"):
+                for variant in range(len(VARIANT_NAMES[condition])):
+                    for pixel in weather_frame(condition, variant, t, values):
+                        self.assertLessEqual(max(pixel) - min(pixel), 1)
+        self.assertLess(max(weather_frame("rain", 1, 0, values)[0]),
+                        max(weather_frame("cloud", 0, 0, values)[0]))
+
+    def test_settings_contexts_and_preview_priority(self):
+        with tempfile.TemporaryDirectory() as folder:
+            store = SettingsStore(str(Path(folder) / "settings.json"))
+            with self.assertRaisesRegex(ValueError, "city"):
+                store.update({"weather_display": "home"})
+            store.update({"weather_location": CITY, "weather_display": "home"})
+            values = store.all()
+            self.assertEqual(values["controller_battery_display"], "off")
+            provider = WeatherProvider()
+            provider._sample, provider._fetched_at = dict(SAMPLE), time.monotonic()
+            self.assertIsNotNone(provider.output(values, game_running=False).frame)
+            self.assertIsNone(provider.output(values, game_running=True).frame)
+            self.assertTrue(provider.preview("snow", 0))
+            weather = provider.output(values)
+            frame = normalize_frame([(10, 10, 10)] * 17)
+            empty = ProviderOutput("none", None, "")
+            args = dict(mode="performance", guard_allows=True, game=GameState(), performance=empty,
+                        artwork=empty, idle=empty, signal=ProviderOutput("countdown", frame, "timer"),
+                        weather_base=weather)
+            self.assertEqual(Arbiter().choose(**args).provider, "countdown")
+            self.assertEqual(Arbiter().choose(**{**args, "signal": empty}).provider, "weather:preview")
+            self.assertEqual(Arbiter().choose(**{**args, "guard_allows": False}).provider, "valve")
+            provider.stop_preview()
+            self.assertFalse(provider.status(values)["preview_active"])
+            self.assertIsNone(provider.status(values)["temperature_c"])
+            self.assertFalse(values["weather_topbar_enabled"])
+            store.update({"controller_battery_display": "game"})
+            self.assertEqual(store.all()["weather_display"], "off")
+            store.update({"weather_topbar_enabled": True})
+            self.assertEqual(store.all()["controller_battery_display"], "game")
+            self.assertEqual(store.all()["weather_display"], "off")
+            self.assertTrue(Engine(store, str(Path(folder) / "cache")).status()["weather_topbar_enabled"])
+            store.update({"weather_location": None})
+            self.assertFalse(store.all()["weather_topbar_enabled"])
+
+    def test_topbar_fetches_when_led_weather_is_off_and_expires(self):
+        now = [100.0]
+        provider = WeatherProvider(clock=lambda: now[0], fetch=lambda location: dict(SAMPLE, temperature_c=8.6))
+        values = dict(DEFAULTS, weather_location=CITY, weather_topbar_enabled=True)
+        provider.configure(CITY, "off", True)
+        provider.start()
+        try:
+            deadline = time.monotonic() + 1
+            while provider.status(values)["phase"] != "ready" and time.monotonic() < deadline:
+                time.sleep(.005)
+            self.assertEqual(provider.status(values)["temperature_c"], 8.6)
+            self.assertIsNone(provider.output(values).frame)
+            now[0] += 3600
+            self.assertIsNone(provider.status(values)["temperature_c"])
+        finally:
+            provider.stop()
+
+    def test_topbar_requires_city_and_starts_without_opening_decky_settings(self):
+        with tempfile.TemporaryDirectory() as folder:
+            settings = SettingsStore(str(Path(folder) / "settings.json"))
+            with self.assertRaisesRegex(ValueError, "city"):
+                settings.update({"weather_topbar_enabled": True})
+            settings.update({"weather_location": CITY, "weather_topbar_enabled": True})
+            self.assertEqual(settings.all()["weather_display"], "off")
+            engine = Engine(settings, str(Path(folder) / "artwork.json"))
+            engine.weather = WeatherProvider(fetch=lambda location: dict(SAMPLE, temperature_c=11.2))
+            engine.weather.configure(CITY, "off", True)
+            engine.start()
+            try:
+                deadline = time.monotonic() + 2
+                while engine.status()["weather"]["phase"] != "ready" and time.monotonic() < deadline:
+                    time.sleep(.01)
+                status = engine.status()
+                self.assertEqual(status["weather"]["temperature_c"], 11.2)
+                self.assertTrue(status["weather_topbar_enabled"])
+                self.assertNotEqual(status["provider"], "weather")
+            finally:
+                engine.stop()
+
+
+if __name__ == "__main__":
+    unittest.main()

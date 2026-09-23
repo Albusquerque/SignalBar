@@ -1,5 +1,129 @@
 # Changelog
 
+## 0.6.0 - 2026-09-24
+
+Official release. Changes since 0.5.1:
+
+### Weather
+
+- Add optional local-weather lighting for clear day, clear night, rain, cloud,
+  partly cloudy day and night, snow, and thunderstorm. Each of the eight sky
+  conditions has two selectable eight-second LED loops (16 total), including
+  **Snow takes hold** as the fresh-install snow choice. Preview every loop
+  without a city or network connection.
+- Let Weather run on Home, in game, or everywhere. A permanent Weather scene
+  and the permanent controller gauge are mutually exclusive; the controller
+  gauge remains the fresh-install default until a user chooses a city and
+  enables Weather. Countdowns, brief alerts, Valve's ownership guard, and the
+  recording marker retain their priorities.
+- Search for a city or postal code with an optional country, then request
+  current conditions from Open-Meteo about every fifteen minutes. There is no
+  automatic location detection or API key. A stale reading yields the LED bar
+  instead of remaining on display. SteamOS HTTPS certificate verification
+  remains enabled, with the system CA bundle used when Decky's embedded Python
+  cannot find the issuer.
+- Tune Weather-only brightness and the faint-LED cutoff for the physical
+  diffuser. Final scenes avoid low-brightness brown, blue-grey and violet LED
+  tails that looked unexpectedly red, cyan or pink on hardware. Temperature
+  is deliberately not represented by LED colours.
+- Add an independent, opt-in **experimental SteamOS top-bar** weather icon and
+  temperature, selectable in Celsius or Fahrenheit. It hides unavailable or
+  stale readings and removes itself when disabled. It has worked on one Steam
+  Machine, but relies on a private Steam UI layout that may change.
+
+### Settings and presentation
+
+- Use the supplied configuration's global choices as fresh-install defaults,
+  except that Snow takes hold is selected for snow. Existing saved settings
+  remain unchanged. Personal per-game profiles from the supplied configuration
+  are not distributed to other users.
+- Add **Import configuration JSON** in Advanced / debug, with a file picker,
+  validation, and confirmation before replacing global settings and per-game
+  profiles. Invalid files leave the current settings untouched.
+- Add a separate confirmed **Reset to defaults** action. Import and reset stop
+  a running personal timer and temporary previews, but do not delete exported
+  JSON or cached artwork.
+- Add a Weather GIF captured from the interactive concept simulator, a real
+  SteamOS top-bar photo, and an updated online simulator with all 16 weather
+  loops. Artwork, Performance, Playtime, Light events and Controllers retain
+  their existing behaviour.
+
+
+## 0.6.0-beta.10 - LOCAL ONLY - 2026-09-23
+
+- Keep fifteen Weather loops: two sun, two moon, two rain, two cloud, two partly cloudy day, two partly cloudy night, one snow and two storm. The original Sun/Moon through clouds loops remain, with a separate fade-out variant for each. Those new variants dim neutral-white cloud LEDs to black while the light appears, without dark brown or blue fringe colours. Rain gains the dimmer Pearl field and another blue accent per impact; snow uses paired and single melt-and-refill gaps; Pulse and echoes gains a second lightning phrase.
+- Remove Weather temperature LEDs, thermometer, Celsius/Fahrenheit and threshold controls, Soft weather halos and Fixed colour test. Old saved values for removed settings are discarded on the next save. Retained Moon, Rain and Storm variant selections migrate when possible. Weather brightness and faint-LED cutoff remain available.
+- Add an opt-in experimental SteamOS top-bar weather icon with the current temperature in °C. It works independently of the LED/weather or controller display, hides stale/unavailable readings, and removes itself when disabled or unloaded. Placement before the clock (or fallback icon row) uses an undocumented Steam UI structure and needs physical SteamOS testing. Temperature is fetched solely for this text indicator, never mapped onto LEDs.
+- Tests and package validation are local only. No GitHub push or release.
+
+## 0.6.0-beta.9 - LOCAL ONLY - 2026-09-23
+
+- Replace the weather animation set with the latest approved mockup: two sun, five moon, four rain, two cloud, two snowy, five storm, and separate two-variant partly cloudy day/night loops. Use yellow/lemon sun rays, neutral silver/cloud/snow, blue rain, and white lightning instead of dim brown, blue-grey, or violet tails.
+- Add separate night-time partly cloudy rendering for Open-Meteo code 2, including an ivory moon and two alternating clearings.
+- Add temperature placement choices: one or two LEDs at both ends, one LED at either end, Off, or a brief thermometer after each uninterrupted eight-second weather loop. The thermometer fills across the 17 LEDs using the saved Cold-to-Hot range, then fades over 1.6 seconds.
+- Keep existing temperature thresholds, colours, Celsius/Fahrenheit choice, brightness, faint-pixel cutoff, weather/controller exclusivity, and higher-priority signals. Migrate saved endpoint width to the equivalent new choice. Old out-of-range animation selections fall back to the first current variant.
+- Update the Decky labels and saved-configuration summary. Local automated tests pass; physical colour and timing still require Steam Machine validation. No GitHub publication.
+
+## 0.6.0-beta.8 - LOCAL ONLY - 2026-09-23
+
+- Add Soft weather halos to all 35 animations, enabled by default and reversible for comparison with beta.7.
+- Reduce colour casts in dim halos by subtracting excess RGB components, not adding white. Remove very faint tails wherever the animation moves instead of masking fixed LEDs at the ends of the bar.
+- Never increase any RGB channel. Preserve bright accents exactly before brightness scaling, plus the independent temperature signature, fixed colour diagnostics and all other SignalBar modes. Weak details may dim or disappear; physical colour fidelity remains unverified.
+- Show the selected halo treatment in Weather settings and the saved configuration summary. Retain existing brightness, cutoff, colours and temperature thresholds.
+- Add all-variant/full-cycle checks for subtractive-only output and unchanged bright accents/temperature tips, plus persistence and raw-test isolation checks. No GitHub publication.
+
+## 0.6.0-beta.7 - LOCAL ONLY - 2026-09-23
+
+- Remove Weather's extra gamma curve for all 35 animations. At brightness 100% and cutoff 0, final RGB processing is now exactly neutral.
+- Replace shadow remapping with an explicit faint-LED cutoff: pixels at or below the cutoff turn off; surviving pixels are not dimmed further. Existing brightness/cutoff values are preserved, but their effect changes and the bar may appear brighter than in beta.6. Higher cutoffs can make transitions more abrupt.
+- Add fixed Light Events gold/white tests at 5%, 10%, 20%, 35%, 50%, 75% and 100%, on three centre LEDs or the full bar. Each lasts 12 seconds, shows the exact RGB requested and supports manual stop. Tests bypass weather brightness, cutoff and temperature tips without changing saved settings.
+- Preserve countdown, alert and Steam ownership priorities. Steam's master brightness and the recording marker still apply; stop recording before comparing colours.
+- Retain current animation geometry pending hardware observations. This build enables a controlled low-intensity/diffusion comparison; it does not claim a measured colour calibration or a confirmed physical fix.
+- Include previous weather, temperature-unit and HTTPS fixes. No GitHub publication.
+
+## 0.6.0-beta.6 - LOCAL ONLY - 2026-09-23
+
+- Add adjustable Cold, Mild and Hot weather temperature anchors, with ordered bounds and persistent settings. Preserve the previous −10°C / 15°C / 40°C defaults.
+- Add Celsius/Fahrenheit selection for weather readings, threshold controls, the quick panel and saved configuration summary. Store thresholds in Celsius internally so switching units never changes the LED colours.
+- Keep colour blending between anchors and clamp to the Cold/Hot colour outside them. Performance temperature units are unchanged.
+- Include the beta.5 colour fixes and beta.4 HTTPS fix. No GitHub publication.
+
+## 0.6.0-beta.5 - LOCAL ONLY - 2026-09-23
+
+- Rework sun and moon colours using the Light Events gold, champagne and white palette and its bounded RGB blending. Remove the brown sun background and saturated blue moon layers rather than merely dimming them. Keep the animation motion and breathing.
+- Golden Swell now uses gold across its breathing halo; Silver Hush uses the same near-neutral white throughout its centre and outer halo. Blue Hour uses pale ice-white instead of deep blue.
+- Add Off to the temperature endpoint selector so the animation can be viewed without the independent temperature colours. Existing one- or two-LED selections are preserved.
+- Clarify that Weather brightness/shadow controls are not a measured hardware colour calibration. Light Events and the shared hardware writer are unchanged.
+- Add full-cycle RGB regression checks, Light Events blend parity, and temperature-marker isolation/persistence tests. Physical colour fidelity still requires Steam Machine testing.
+- Include beta.4's verified-system-CA fix for weather requests. No GitHub publication.
+
+## 0.6.0-beta.4 - LOCAL ONLY - 2026-09-23
+
+- Fix the weather city-search and forecast failure reported on SteamOS as `SSL: CERTIFICATE_VERIFY_FAILED` by retrying with the operating system's trusted CA bundle when Decky's embedded Python cannot find the issuer.
+- Keep HTTPS certificate and hostname verification enabled; never fall back to an unverified connection.
+- Add regression tests for a simulated missing-issuer failure and verify both city search and current weather through that recovery path locally. Real Steam Machine confirmation remains pending.
+
+## 0.6.0-beta.3 - LOCAL ONLY - 2026-09-23
+
+- Calibrate Weather RGB for the physical Steam Machine diffuser: dim midtones and fade dark brown/blue backgrounds toward black while keeping brighter animation accents.
+- Add Weather-only LED brightness and shadow cutoff controls, plus direct night/daylight previews beside them. Other modes and Steam's master brightness are untouched.
+- Keep the RGB preview aligned with the values actually written to the bar. The exact physical appearance still needs device testing.
+
+## 0.6.0-beta.2 - LOCAL ONLY - 2026-09-23
+
+- Add an optional country field to city search. Open-Meteo accepts a full country name or two-letter code after the city name.
+- Return a clear backend diagnostic when city search fails, so a Decky/network error is distinguishable from an empty result.
+- Exercise the real asynchronous Decky search entry point in automated tests and verify live city plus weather responses locally. Steam Machine networking still needs device validation.
+
+## 0.6.0-beta.1 - LOCAL ONLY - 2026-09-23
+
+- Add opt-in local weather using manual city search and Open-Meteo current conditions, with no automatic location detection or API key.
+- Add five selectable LED loops each for clear day, moon and stars, rain, cloud, sunny intervals, snow, and storm, plus a one-cycle preview.
+- Add a steady one- or two-LED temperature signature at both ends of the bar, with customizable cold, mild, and hot colours.
+- Let weather appear on Home, in game, or everywhere. Permanent weather and the permanent controller battery gauge automatically turn one another off; the controller gauge remains the fresh-install default.
+- Keep countdowns, brief alerts, Steam's LED ownership guard, and the recording marker above a permanent weather signal. Suspend stale weather instead of displaying it as current.
+- Keep this beta local for device testing; stable v0.5.1 and GitHub are unchanged.
+
 ## 0.5.1 - 2026-09-23
 
 Patch release focused on clearer documentation and a configuration export that

@@ -13,9 +13,11 @@ FILES = [
     "main.py", "plugin.json", "package.json", "LICENSE", "README.md",
     "ARCHITECTURE.md", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md", "dist/index.js",
     "docs/CONTROLLERS_RESEARCH.md",
+    "docs/WEATHER.md",
     "assets/signalbar-product-hero-v4.png",
     "assets/signalbar-artwork-mode-v1.png",
     "assets/signalbar-performance-mode-v1.png",
+    "assets/weather-topbar-photo-large.png",
 ]
 
 

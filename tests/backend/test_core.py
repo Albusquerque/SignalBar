@@ -355,13 +355,13 @@ class CoreTests(unittest.TestCase):
 
 
 class PersistenceTests(unittest.TestCase):
-    def test_v050_fresh_install_defaults_match_approved_configuration(self):
+    def test_v060_fresh_install_defaults_match_approved_configuration(self):
         with tempfile.TemporaryDirectory() as directory:
             path = str(Path(directory) / "config.json")
             store = SettingsStore(path)
             expected = {
                 "mode": "performance", "performance_metric": "mixed",
-                "performance_smoothing": "balanced", "performance_always": True,
+                "performance_smoothing": "responsive", "performance_always": True,
                 "mixed_direction": "mirrored", "temperature_palette": "classic",
                 "cool_temp_c": 45.0, "hot_temp_c": 78.0,
                 "artwork_source": "hero", "artwork_mode": "auto", "artwork_manual_y": .34,
@@ -371,7 +371,7 @@ class PersistenceTests(unittest.TestCase):
                 "event_achievements_enabled": True, "event_screenshots_enabled": True,
                 "event_recording_enabled": True, "recording_marker_isolation": True,
                 "event_notification_variant": "notification-beacon",
-                "event_achievement_variant": "achievement-rebound",
+                "event_achievement_variant": "achievement-constellation",
                 "event_screenshot_variant": "screenshot-bloom",
                 "controller_battery_display": "home", "controller_alerts_enabled": True,
                 "controller_alert_context": "both", "controller_charging_mode": "continuous-home",
@@ -381,6 +381,9 @@ class PersistenceTests(unittest.TestCase):
                 "controller_charging_variant": "breath", "controller_duo_variant": "double-welcome",
                 "controller_gauge_brightness": 65,
                 "reverse_led_order": True, "countdown_dark_edge_compensation": 2,
+                "weather_topbar_enabled": False, "weather_temperature_unit": "celsius",
+                "weather_brightness": 100, "weather_shadow_cutoff": 0,
+                "weather_cloud_variant": 1, "weather_snow_variant": 1,
             }
             for key, value in expected.items():
                 self.assertEqual(store.all()[key], value, key)
@@ -474,12 +477,12 @@ class PersistenceTests(unittest.TestCase):
             loaded = SettingsStore(path).all()
             self.assertEqual(loaded["mode"], "artwork")
             self.assertEqual(loaded["artwork_manual_y"], 0.90)
-            self.assertEqual(loaded["performance_smoothing"], "balanced")
+            self.assertEqual(loaded["performance_smoothing"], "responsive")
             self.assertTrue(loaded["performance_always"])
             self.assertEqual(json.loads(Path(path).read_text())["mode"], "artwork")
 
             store.update({"performance_smoothing": "invalid"})
-            self.assertEqual(store.all()["performance_smoothing"], "balanced")
+            self.assertEqual(store.all()["performance_smoothing"], "responsive")
             store.update({
                 "temperature_palette": "custom",
                 "temperature_custom_cool": [-8, 64.4, 999],

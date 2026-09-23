@@ -440,7 +440,8 @@ class ControllerProvider:
     def persistent_output(self, values, game_running=False):
         policy = values.get("controller_battery_display", "off")
         charging_policy = values.get("controller_charging_display", "off")
-        gauge_allowed = policy == "everywhere" or (policy == "home" and not game_running)
+        gauge_allowed = (policy == "everywhere" or (policy == "home" and not game_running)
+                         or (policy == "game" and game_running))
         charging_allowed = charging_policy == "everywhere" or (charging_policy == "home" and not game_running)
         if not gauge_allowed and not charging_allowed:
             return ProviderOutput("controller-battery", None, "battery display disabled here")

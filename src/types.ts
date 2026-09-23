@@ -7,6 +7,8 @@ export type MixedDirection = "same" | "mirrored";
 export type TemperaturePalette = "thermal" | "classic" | "icefire" | "custom";
 export type CountdownColour = "cyan" | "green" | "amber" | "violet" | "white";
 export type RGB = [number, number, number];
+export type WeatherCondition = "clear_day" | "clear_night" | "rain" | "cloud" | "breaks" | "breaks_night" | "snow" | "storm";
+export interface WeatherLocation { name: string; country: string; latitude: number; longitude: number }
 
 export interface Status {
   version: string;
@@ -51,7 +53,7 @@ export interface Status {
   event_notification_variant: string;
   event_achievement_variant: string;
   event_screenshot_variant: string;
-  controller_battery_display: "off" | "home" | "everywhere";
+  controller_battery_display: "off" | "home" | "game" | "everywhere";
   controller_charging_mode: "off" | "brief" | "continuous-home" | "continuous-everywhere";
   controller_charging_display: "off" | "home" | "everywhere";
   controller_alert_context: "off" | "home" | "game" | "both";
@@ -70,6 +72,36 @@ export interface Status {
   controller_colour_low: RGB;
   controller_colour_charging: RGB;
   controller_gauge_brightness: number;
+  weather_display: "off" | "home" | "game" | "everywhere";
+  weather_location: WeatherLocation | null;
+  weather_topbar_enabled: boolean;
+  weather_temperature_unit: "celsius" | "fahrenheit";
+  weather_brightness: number;
+  weather_shadow_cutoff: number;
+  weather_clear_day_variant: number;
+  weather_clear_night_variant: number;
+  weather_rain_variant: number;
+  weather_cloud_variant: number;
+  weather_breaks_variant: number;
+  weather_breaks_night_variant: number;
+  weather_snow_variant: number;
+  weather_storm_variant: number;
+  weather: {
+    location: WeatherLocation | null;
+    display: Status["weather_display"];
+    phase: "off" | "waiting" | "loading" | "ready" | "error";
+    error: string;
+    temperature_c: number | null;
+    condition: WeatherCondition | null;
+    is_day: boolean | null;
+    weather_code: number | null;
+    observed_at: string;
+    age_s: number | null;
+    preview_active: boolean;
+    preview_remaining_s: number;
+    colors: RGB[];
+    active_here: boolean;
+  };
   controllers: {
     controllers: { id: string; name: string; percent: number | null; level: number | null; charging: boolean | null }[];
     active: boolean;

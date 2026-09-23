@@ -1,9 +1,11 @@
 import { callable } from "@decky/api";
-import type { ArtworkPayload, Status } from "./types";
+import type { ArtworkPayload, Status, WeatherLocation, WeatherCondition } from "./types";
 import type { ControllerTelemetry } from "./controller_monitor";
 
 export const getStatus = callable<[], Status>("get_status");
 export const exportConfiguration = callable<[], ConfigurationExportResult>("export_configuration");
+export const importConfiguration = callable<[path: string], Status>("import_configuration");
+export const resetConfiguration = callable<[], Status>("reset_configuration");
 export const setMode = callable<[mode: string], Status>("set_mode");
 export const setGameDisplay = callable<[appid: number, mode: string], Status>("set_game_display");
 export const setSetting = callable<[key: string, value: unknown], Status>("set_setting");
@@ -34,6 +36,9 @@ export const updateControllers = callable<[controllers: ControllerBatteryUpdate[
 export const resetControllers = callable<[], boolean>("reset_controllers");
 export const reportControllerTelemetry = callable<[state: ControllerTelemetry], boolean>("report_controller_telemetry");
 export const previewController = callable<[kind: string, variant: string], boolean>("preview_controller");
+export const searchWeatherCities = callable<[query: string], { results: WeatherLocation[]; error: string }>("search_weather_cities");
+export const previewWeather = callable<[condition: WeatherCondition, variant: number], boolean>("preview_weather");
+export const stopWeatherPreview = callable<[], boolean>("stop_weather_preview");
 
 export interface ConfigurationExportResult {
   path: string;

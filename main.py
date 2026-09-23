@@ -1,5 +1,6 @@
 """Decky backend entry point for SignalBar."""
 
+import asyncio
 import os
 import sys
 
@@ -10,8 +11,11 @@ sys.path.insert(0, os.path.join(PLUGIN_DIR, "py_modules"))
 
 from signalbar.backend import Engine  # noqa: E402
 from signalbar.settings import SettingsStore  # noqa: E402
-from signalbar.settings.export import configuration_export_path, write_configuration_export  # noqa: E402
+from signalbar.settings.export import (  # noqa: E402
+    configuration_export_path, read_configuration_import, write_configuration_export,
+)
 from signalbar.steam import get_library_artwork  # noqa: E402
+from signalbar.providers.weather import search_cities  # noqa: E402
 
 
 class Plugin:
@@ -44,6 +48,15 @@ class Plugin:
             status["version"],
             status["game"],
         )
+
+    async def import_configuration(self, path: str):
+        global_values, display_profiles, artwork_profiles = read_configuration_import(path)
+        self.engine.import_configuration(global_values, display_profiles, artwork_profiles)
+        return self.engine.status()
+
+    async def reset_configuration(self):
+        self.engine.reset_configuration()
+        return self.engine.status()
 
     async def set_mode(self, mode: str):
         self.engine.update_settings({"mode": mode})
@@ -127,3 +140,17 @@ class Plugin:
 
     async def preview_controller(self, kind: str, variant: str = ""):
         return self.engine.preview_controller(kind, variant)
+
+    async def search_weather_cities(self, query: str):
+        try:
+            cities = await asyncio.get_running_loop().run_in_executor(None, search_cities, query)
+            return {"results": cities, "error": ""}
+        except Exception as error:
+            decky.logger.warning(f"[SignalBar] city search failed: {type(error).__name__}: {error}")
+            return {"results": [], "error": f"{type(error).__name__}: {error}"[:180]}
+
+    async def preview_weather(self, condition: str, variant: int):
+        return self.engine.preview_weather(condition, variant)
+
+    async def stop_weather_preview(self):
+        return self.engine.stop_weather_preview()

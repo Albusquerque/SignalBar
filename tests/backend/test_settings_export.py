@@ -1,17 +1,46 @@
 import json
+import asyncio
+import importlib.util
 from pathlib import Path
+import sys
 import tempfile
+import types
 import unittest
+from unittest.mock import Mock, patch
 
 from signalbar.settings import SettingsStore
 from signalbar.settings.export import (
     build_configuration_export,
     configuration_export_path,
+    read_configuration_import,
     write_configuration_export,
 )
 
 
 class SettingsExportTests(unittest.TestCase):
+    def test_decky_import_and_reset_routes_reach_engine(self):
+        root = Path(__file__).resolve().parents[2]
+        with tempfile.TemporaryDirectory() as directory:
+            settings = SettingsStore(str(Path(directory) / "config.json"))
+            settings.update({"performance_smoothing": "smooth"})
+            export_path = Path(directory) / "SignalBar-configuration.json"
+            write_configuration_export(settings, export_path, "0.6.0")
+            decky = types.ModuleType("decky")
+            with patch.dict(sys.modules, {"decky": decky}):
+                spec = importlib.util.spec_from_file_location("signalbar_import_test", root / "main.py")
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                plugin = module.Plugin()
+                plugin.engine = Mock()
+                plugin.engine.status.return_value = {"version": "0.6.0"}
+                self.assertEqual(asyncio.run(plugin.import_configuration(str(export_path))),
+                                 {"version": "0.6.0"})
+                args = plugin.engine.import_configuration.call_args.args
+                self.assertEqual(args[0]["performance_smoothing"], "smooth")
+                plugin.engine.reset_configuration.assert_not_called()
+                self.assertEqual(asyncio.run(plugin.reset_configuration()), {"version": "0.6.0"})
+                plugin.engine.reset_configuration.assert_called_once_with()
+
     def test_export_groups_global_profiles_and_current_game(self):
         with tempfile.TemporaryDirectory() as directory:
             store = SettingsStore(str(Path(directory) / "config.json"))
@@ -58,6 +87,51 @@ class SettingsExportTests(unittest.TestCase):
             configuration_export_path("/tmp/settings"),
             Path("/tmp/settings/SignalBar-configuration.json"),
         )
+
+    def test_round_trip_import_reset_and_invalid_import_are_atomic(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            source = SettingsStore(str(folder / "source.json"))
+            source.update({"performance_smoothing": "smooth", "weather_temperature_unit": "fahrenheit"})
+            source.update_display(42, "artwork")
+            source.update_artwork(42, {"mode": "manual", "manual_y": .83, "source": "header"})
+            export = folder / "SignalBar-configuration.json"
+            write_configuration_export(source, export, "0.6.0")
+            global_values, display, artwork = read_configuration_import(str(export))
+            target = SettingsStore(str(folder / "target.json"))
+            imported = target.replace_configuration(global_values, display, artwork)
+            self.assertEqual(imported["performance_smoothing"], "smooth")
+            self.assertEqual(imported["weather_temperature_unit"], "fahrenheit")
+            self.assertEqual(target.display_for(42)["mode"], "artwork")
+            self.assertEqual(target.artwork_for(42)["manual_y"], .83)
+            before = (folder / "target.json").read_bytes()
+
+            with self.assertRaisesRegex(ValueError, "Invalid configuration setting"):
+                target.replace_configuration({**global_values, "mode": "not-a-mode"}, display, artwork)
+            self.assertEqual((folder / "target.json").read_bytes(), before)
+            self.assertEqual(target.all()["performance_smoothing"], "smooth")
+
+            reset = target.reset_configuration()
+            self.assertEqual(reset["performance_smoothing"], "responsive")
+            self.assertEqual(reset["weather_snow_variant"], 1)
+            self.assertEqual(reset["weather_temperature_unit"], "celsius")
+            self.assertEqual(reset["display_profiles"], {})
+            self.assertEqual(reset["artwork_profiles"], {})
+            self.assertEqual(SettingsStore(str(folder / "target.json")).all(), reset)
+
+    def test_import_reader_rejects_bad_schema_and_oversized_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "SignalBar-configuration.json"
+            for payload in ({"schema_version": 2}, {"schema_version": 1, "configuration": {}},
+                            {"schema_version": 1, "configuration": {"global": {}, "profiles": []}}):
+                path.write_text(json.dumps(payload), encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    read_configuration_import(str(path))
+            path.write_bytes(b" " * (1024 * 1024 + 1))
+            with self.assertRaisesRegex(ValueError, "under 1 MB"):
+                read_configuration_import(str(path))
+            with self.assertRaises(ValueError):
+                read_configuration_import("relative.json")
 
 
 if __name__ == "__main__":

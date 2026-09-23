@@ -15,6 +15,7 @@ from signalbar.hardware import ValveLedHardware
 from signalbar.models import GameState
 from signalbar.providers import ArtworkProvider, CountdownProvider, EventProvider, IdleProvider, PerformanceProvider
 from signalbar.providers.controller import ControllerProvider
+from signalbar.providers.weather import WeatherProvider
 from signalbar.renderer import Renderer
 
 
@@ -29,6 +30,9 @@ class Engine:
         self.events = EventProvider()
         self.events.set_variants(settings.all())
         self.controllers = ControllerProvider()
+        self.weather = WeatherProvider()
+        initial = settings.all()
+        self.weather.configure(initial["weather_location"], initial["weather_display"], initial["weather_topbar_enabled"])
         self.idle = IdleProvider()
         self.arbiter = Arbiter()
         self._lock = threading.RLock()
@@ -71,11 +75,13 @@ class Engine:
             if self._thread and self._thread.is_alive():
                 return
             self._stop.clear()
+            self.weather.start()
             self._thread = threading.Thread(target=self._run, name="signalbar-engine", daemon=True)
             self._thread.start()
 
     def stop(self):
         self._stop.set()
+        self.weather.stop()
         thread = self._thread
         if thread and thread.is_alive():
             thread.join(timeout=2.0)
@@ -300,8 +306,53 @@ class Engine:
             self.events.clear_transients()
         return played
 
+    def _weather_preview_allowed(self):
+        values = self.settings.all()
+        if values["mode"] == "disabled":
+            return False
+        with self._lock:
+            running = self._game.running
+        countdown = self.countdown.status(
+            allow_parental=values["parental_countdown_enabled"] and running,
+        )
+        if countdown["active"] and countdown["remaining_seconds"] <= 300:
+            return False
+        return True
+
+    def preview_weather(self, condition, variant):
+        return self._weather_preview_allowed() and self.weather.preview(condition, variant)
+
+    def stop_weather_preview(self):
+        self.weather.stop_preview()
+        return True
+
     def update_settings(self, changes):
         values = self.settings.update(changes)
+        self._apply_settings(values, changes)
+        return values
+
+    def import_configuration(self, global_values, display_profiles, artwork_profiles):
+        previous = self.settings.all()
+        values = self.settings.replace_configuration(global_values, display_profiles, artwork_profiles)
+        changes = {key: value for key, value in values.items() if previous.get(key) != value}
+        self._apply_settings(values, changes)
+        self.countdown.stop("free")
+        self.weather.stop_preview()
+        self.controllers.clear_transients()
+        self.events.clear_transients()
+        with self._lock:
+            if self._artwork_identity:
+                appid, fingerprint, _, _ = self._artwork_identity
+                artwork_settings = self.settings.artwork_for(appid)
+                self.artwork.activate_cached(appid, fingerprint,
+                                             artwork_settings["mode"], artwork_settings["manual_y"])
+        return values
+
+    def reset_configuration(self):
+        return self.import_configuration({}, {}, {})
+
+    def _apply_settings(self, values, changes):
+        self.weather.configure(values["weather_location"], values["weather_display"], values["weather_topbar_enabled"])
         self.events.set_variants(values)
         with self._lock:
             running = self._game.running
@@ -340,7 +391,6 @@ class Engine:
             if self._guard:
                 self._guard.cooldown_s = values["guard_cooldown_s"]
                 self._guard.stable_s = values["guard_stable_s"]
-        return values
 
     def _run(self):
         hardware = None
@@ -445,6 +495,7 @@ class Engine:
                 event = self.events.output()
                 controller_event = self.controllers.event_output()
                 controller_base = self.controllers.persistent_output(values, game.running)
+                weather_base = self.weather.output(values, game.running, now)
                 # Moving event waves need more than ten samples per second to
                 # visibly visit all 17 positions. Normal providers stay at
                 # the conservative 10 Hz cadence.
@@ -454,6 +505,7 @@ class Engine:
                     performance=performance, artwork=artwork, idle=self.idle.output(),
                     signal=signal, event=event, signal_critical=signal_critical,
                     controller_event=controller_event, controller_base=controller_base,
+                    weather_base=weather_base,
                     recording_marker=(
                         self.events.recording and values["events_enabled"]
                         and values["event_recording_enabled"]
@@ -569,6 +621,7 @@ class Engine:
                 ),
             )
             controller_status = self.controllers.status(values, self._game.running)
+            weather_status = self.weather.status(values, self._game.running)
             return {
                 "version": __version__,
                 "available": self._available,
@@ -631,6 +684,14 @@ class Engine:
                 "controller_colour_low": values["controller_colour_low"],
                 "controller_colour_charging": values["controller_colour_charging"],
                 "controller_gauge_brightness": values["controller_gauge_brightness"],
+                "weather_display": values["weather_display"],
+                "weather_location": values["weather_location"],
+                "weather_topbar_enabled": values["weather_topbar_enabled"],
+                "weather_temperature_unit": values["weather_temperature_unit"],
+                "weather_brightness": values["weather_brightness"],
+                "weather_shadow_cutoff": values["weather_shadow_cutoff"],
+                **{key: values[key] for key in values if key.startswith("weather_") and key.endswith("_variant")},
+                "weather": weather_status,
                 "controllers": controller_status,
                 "events": self.events.status(),
                 "game": {"appid": self._game.appid, "title": self._game.title},
