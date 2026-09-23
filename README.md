@@ -8,6 +8,8 @@ Steam moments take the stage before your display returns.
 
 [Download SignalBar v0.5.1](https://github.com/Albusquerque/SignalBar/releases/tag/v0.5.1)
 
+[Try the interactive SignalBar preview before installing](https://albusquerque.github.io/signalbar-concept/)
+
 ## Your everyday display
 
 ### Artwork
