@@ -75,6 +75,8 @@ signal appears. The GIF shows the two-controller gauge and continuous charging.
 
 ![Two mirrored controller gauges followed by continuous charging](assets/readme-gifs/controller-battery.gif)
 
+[Explore the interactive controller mockup](https://albusquerque.github.io/signalbar-controller-battery/)
+
 Battery and charging data depend on the controller. Unknown levels are never
 invented; see the [controller test notes](docs/CONTROLLERS_RESEARCH.md).
 

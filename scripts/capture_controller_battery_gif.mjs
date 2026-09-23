@@ -17,7 +17,7 @@ try {
   await page.setContent('<!doctype html><html><body style="margin:0"><iframe sandbox="allow-scripts" style="display:block;border:0;width:100%;height:720px"></iframe></body></html>');
   await page.locator("iframe").evaluate((iframe, html) => {
     const csp = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'";
-    iframe.srcdoc = `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${csp}"><style>html,body{margin:0}#sb-motion-lab .sb-picks,#sb-motion-lab .sb-caption{display:none}#sb-motion-lab .sb-visual{align-self:start}</style></head><body>${html}</body></html>`;
+    iframe.srcdoc = `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${csp}"><style>html,body{margin:0}#sb-motion-lab .sb-picks,#sb-motion-lab .sb-caption{display:none}#sb-motion-lab .sb-visual{align-self:start}</style></head><body>${html}<style>#sb-motion-lab .sb-light{filter:blur(.8px)}#sb-motion-lab .sb-bloom{top:-5px;height:18px;filter:blur(5px);opacity:.38!important}#sb-motion-lab .sb-reflection{filter:blur(4px);opacity:.12}</style></body></html>`;
   }, source);
   const frame = page.frameLocator("iframe");
   const crop = frame.locator(".sb-visual");
@@ -41,7 +41,7 @@ try {
       await crop.screenshot({ path: path.join(scratch, `${String(count++).padStart(4, "0")}.png`) });
     }
   }
-  execFileSync("python3", [path.join(root, "scripts/encode_readme_gif.py"), scratch, output, String(interval), "700", "256"], { stdio: "inherit" });
+  execFileSync("python3", [path.join(root, "scripts/encode_readme_gif.py"), scratch, output, String(interval), "500", "96"], { stdio: "inherit" });
   console.log(output);
 } finally {
   await browser.close();

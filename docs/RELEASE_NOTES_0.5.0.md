@@ -26,6 +26,8 @@ are preserved when upgrading.
 
 ![Two mirrored controller gauges followed by continuous charging](https://raw.githubusercontent.com/Albusquerque/SignalBar/main/assets/readme-gifs/controller-battery.gif)
 
+[Explore the interactive controller mockup](https://albusquerque.github.io/signalbar-controller-battery/)
+
 ## Other improvements
 
 - Save Artwork or Performance as the display choice for each game. Returning
