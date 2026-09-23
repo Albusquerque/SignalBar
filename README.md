@@ -6,21 +6,7 @@ Make your Steam Machine's 17-pixel light bar useful and a little more
 expressive. Choose a persistent display, then let playtime warnings and short
 Steam moments take the stage before your display returns.
 
-[Download SignalBar v0.5.0](https://github.com/Albusquerque/SignalBar/releases/tag/v0.5.0)
-
-Version 0.5.0 adds controller battery signals and new controls for how they
-appear. A fresh installation starts with Performance, Playtime and Light events
-enabled, plus a controller gauge and charging animation on the Steam Home screen.
-Existing saved preferences are not replaced when upgrading.
-
-Choose a default display, then optionally save Artwork or Performance for each
-running game in the Decky panel. **Use default** removes that game's override.
-Returning Home uses the default again. **Disabled** always turns off SignalBar
-lighting, even when a game has its own profile.
-
-To review your choices in one place, open **Advanced / debug > Show debug
-details**. The configuration snapshot groups saved options from every tab and
-separates global Artwork defaults from the current game's settings.
+[Download SignalBar v0.5.1](https://github.com/Albusquerque/SignalBar/releases/tag/v0.5.1)
 
 ## Your everyday display
 
@@ -136,7 +122,7 @@ SignalBar follows a strict order:
 ### Decky Loader
 
 1. Install [Decky Loader](https://decky.xyz/) and enable Developer Mode.
-2. Download `SignalBar-v0.5.0.zip` from the release linked above. Do not extract it.
+2. Download `SignalBar-v0.5.1.zip` from the release linked above. Do not extract it.
 3. Open **Decky Settings > Developer > Install Plugin from ZIP**.
 4. Select the downloaded archive.
 5. Restart Decky Loader if SignalBar does not appear immediately.
@@ -222,6 +208,15 @@ default is two.
 The official Steam Machine's physical LED order is reversed by default while
 the Decky preview remains left to right.
 
+### Configuration export
+
+Open **Advanced / debug > Show debug details** and choose **Export configuration
+JSON**. SignalBar writes a readable snapshot of global settings, saved per-game
+profiles, and the current game's resolved choices to
+`/home/deck/Documents/SignalBar-configuration.json` on a standard SteamOS setup.
+The panel always shows the exact path used. Exporting again replaces only that
+file, and controller device IDs are never included.
+
 ## Safety and privacy
 
 - No telemetry, cloud service, account login, or runtime network request
@@ -258,7 +253,7 @@ npm run build
 npm run package
 ```
 
-The installable archive is written to `out/SignalBar-v0.5.0.zip`.
+The installable archive is written to `out/SignalBar-v0.5.1.zip`.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for provider, arbitration, guard, and
 hardware-rendering details. Release history is available in

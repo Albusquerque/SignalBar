@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { TbCubeSpark } from "react-icons/tb";
 
 import {
+  exportConfiguration,
   getArtwork,
   getStatus,
   previewCountdown,
@@ -541,6 +542,8 @@ function Content({ page = "quick" }: { page?: Page }) {
   const [heroRequestKey, setHeroRequestKey] = useState("");
   const artworkRequest = useRef(0);
   const [showDebug, setShowDebug] = useState(false);
+  const [configurationExportPath, setConfigurationExportPath] = useState("");
+  const [configurationExportError, setConfigurationExportError] = useState("");
   const manualTimer = useRef<number | null>(null);
   const setStatus = (next: Status) => {
     setStatusState(next);
@@ -930,7 +933,7 @@ function Content({ page = "quick" }: { page?: Page }) {
           <>
             <PanelSectionRow>
               <div style={{ width: "100%", padding: "8px 10px", background: "rgba(0, 0, 0, .24)", borderRadius: 6, overflowWrap: "anywhere" }}>
-                <div style={{ fontSize: ".88em", fontWeight: 700 }}>Configuration snapshot</div>
+                <div style={{ fontSize: ".88em", fontWeight: 700 }}>Saved configuration</div>
                 <div style={{ fontSize: ".68em", opacity: .7, marginBottom: 6 }}>
                   SignalBar {status.version} · saved choices, including inactive options · no device IDs
                 </div>
@@ -940,6 +943,28 @@ function Content({ page = "quick" }: { page?: Page }) {
                 </div>)}
               </div>
             </PanelSectionRow>
+            <PanelSectionRow>
+              <ButtonItem
+                label="Export configuration JSON"
+                description={configurationExportPath
+                  ? `Saved to ${configurationExportPath}`
+                  : "Write a readable copy to Documents when available; the exact path appears here."}
+                onClick={() => void exportConfiguration()
+                  .then((result) => {
+                    setConfigurationExportPath(result.path);
+                    setConfigurationExportError("");
+                  })
+                  .catch((error) => {
+                    console.warn("[SignalBar] configuration export failed", error);
+                    setConfigurationExportError(error instanceof Error ? error.message : String(error));
+                  })}
+              >Export JSON</ButtonItem>
+            </PanelSectionRow>
+            {configurationExportError ? <PanelSectionRow>
+              <div style={{ width: "100%", fontSize: ".76em", color: "#ff9e9e", overflowWrap: "anywhere" }}>
+                Export failed: {configurationExportError}
+              </div>
+            </PanelSectionRow> : null}
             <PanelSectionRow>
               <div style={{ width: "100%", fontSize: ".76em", opacity: 0.78, overflowWrap: "anywhere" }}>
                 <div>LED path: {status.debug.led_path}</div>

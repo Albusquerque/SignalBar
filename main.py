@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.join(PLUGIN_DIR, "py_modules"))
 
 from signalbar.backend import Engine  # noqa: E402
 from signalbar.settings import SettingsStore  # noqa: E402
+from signalbar.settings.export import configuration_export_path, write_configuration_export  # noqa: E402
 from signalbar.steam import get_library_artwork  # noqa: E402
 
 
@@ -18,6 +19,10 @@ class Plugin:
         settings_path = os.path.join(decky.DECKY_PLUGIN_SETTINGS_DIR, "config.json")
         cache_path = os.path.join(decky.DECKY_PLUGIN_SETTINGS_DIR, "artwork-cache.json")
         self.engine = Engine(SettingsStore(settings_path), cache_path, decky.logger)
+        self.configuration_export_path = configuration_export_path(
+            decky.DECKY_PLUGIN_SETTINGS_DIR,
+            os.environ.get("DECKY_USER_HOME"),
+        )
         self.engine.start()
         decky.logger.info("[SignalBar] loaded")
 
@@ -30,6 +35,15 @@ class Plugin:
 
     async def get_status(self):
         return self.engine.status()
+
+    async def export_configuration(self):
+        status = self.engine.status()
+        return write_configuration_export(
+            self.engine.settings,
+            self.configuration_export_path,
+            status["version"],
+            status["game"],
+        )
 
     async def set_mode(self, mode: str):
         self.engine.update_settings({"mode": mode})

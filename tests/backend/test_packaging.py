@@ -66,6 +66,8 @@ class PackagingTests(unittest.TestCase):
         self.assertIn('label="Meter response"', panel)
         self.assertIn('setSetting("performance_smoothing", String(option.data))', panel)
         self.assertIn('status.mode === "performance"', panel)
+        self.assertIn('label="Export configuration JSON"', panel)
+        self.assertIn("setConfigurationExportPath(result.path)", panel)
         self.assertIn('<PerformanceReadout status={status} />', panel)
         readout = panel[panel.index("function PerformanceReadout"):panel.index("function ColorChoice")]
         self.assertNotIn("PalettePreview", readout)

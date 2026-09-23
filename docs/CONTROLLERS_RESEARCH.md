@@ -123,8 +123,8 @@ SIGNALBAR_STEAM_UI_BUNDLE='/absolute/path/to/steamui/chunk~2dcc5aaf7.js' \
 
 ## Hardware compatibility test
 
-1. Install `SignalBar-v0.5.0.zip` from the release in Decky Developer settings.
-   Restart Decky. Settings should show **0.5.0**.
+1. Install `SignalBar-v0.5.1.zip` from the release in Decky Developer settings.
+   Restart Decky. Settings should show **0.5.1**.
 2. With the Steam Controller already on, open Controllers after a few seconds.
    Expect its name, a percentage or explicit "battery unavailable", and
    `Steam connection: ready`. `0/3` hooks with successful queries still permits

@@ -9,6 +9,7 @@ from __future__ import annotations
 import threading
 import time
 
+from signalbar import __version__
 from signalbar.arbiter import Arbiter, VanillaGuard
 from signalbar.hardware import ValveLedHardware
 from signalbar.models import GameState
@@ -569,7 +570,7 @@ class Engine:
             )
             controller_status = self.controllers.status(values, self._game.running)
             return {
-                "version": "0.5.0",
+                "version": __version__,
                 "available": self._available,
                 "active": self._owner == "SignalBar",
                 "owner": self._owner,

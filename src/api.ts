@@ -3,6 +3,7 @@ import type { ArtworkPayload, Status } from "./types";
 import type { ControllerTelemetry } from "./controller_monitor";
 
 export const getStatus = callable<[], Status>("get_status");
+export const exportConfiguration = callable<[], ConfigurationExportResult>("export_configuration");
 export const setMode = callable<[mode: string], Status>("set_mode");
 export const setGameDisplay = callable<[appid: number, mode: string], Status>("set_game_display");
 export const setSetting = callable<[key: string, value: unknown], Status>("set_setting");
@@ -33,6 +34,11 @@ export const updateControllers = callable<[controllers: ControllerBatteryUpdate[
 export const resetControllers = callable<[], boolean>("reset_controllers");
 export const reportControllerTelemetry = callable<[state: ControllerTelemetry], boolean>("report_controller_telemetry");
 export const previewController = callable<[kind: string, variant: string], boolean>("preview_controller");
+
+export interface ConfigurationExportResult {
+  path: string;
+  exported_at: string;
+}
 
 export interface ControllerBatteryUpdate {
   id: string;

@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.5.1 - 2026-09-23
+
+Patch release focused on clearer documentation and a configuration export that
+can be retrieved directly in SteamOS Desktop Mode.
+
+- Streamline the README opening so the short product description and v0.5.1
+  download lead directly into the main display modes.
+- Rename the Advanced / debug summary to **Saved configuration** and add an
+  explicit **Export configuration JSON** action.
+- Write the export atomically to
+  `/home/deck/Documents/SignalBar-configuration.json` on a standard SteamOS
+  installation, show the exact resolved path in the panel, and keep the file
+  owned by the desktop user even though Decky runs the backend as root.
+- Group global settings, every saved per-game Display and Artwork profile, and
+  the current game's resolved choices in the exported document. Controller
+  device identifiers and runtime hardware diagnostics are not included.
+- Refine the controller-battery README animation for a smaller download and a
+  softer LED glow.
+
 ## 0.5.0 - 2026-09-23
 
 Official release. Changes since 0.4.0:
