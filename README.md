@@ -114,7 +114,8 @@ Each category has its own switch, animation selector, and nearby live preview.
 
 ### Notification
 
-A cyan call travels across the whole strip and echoes back into quiet.
+Return beacon is the fresh-install choice. The GIF below shows Wide echo,
+another selectable notification style.
 
 ![Wide echo notification](assets/readme-gifs/notification.gif)
 
@@ -126,8 +127,8 @@ An icy shutter closes, followed by two flashes with expanding echoes.
 
 ### Achievement
 
-A constellation appears, connects in both directions, and celebrates with two
-full-bar bursts.
+Chromatic rebound is the fresh-install choice. The GIF below shows the
+alternative Constellation round trip style.
 
 ![Constellation achievement animation](assets/readme-gifs/achievement.gif)
 
