@@ -64,47 +64,19 @@ During the final eight seconds, three short white flashes repeat until zero.
 
 ### Controller battery
 
-Get a brief connection signal and a low-battery warning when Steam reports a
-controller. An optional permanent battery gauge can appear on Home or everywhere.
-With two known battery levels, it gives each controller eight mirrored LEDs,
-leaves the centre LED off and adds fixed white endpoints after the introduction.
-The two-controller preview holds those endpoints long enough to inspect them.
-Three visual styles are available for connection, low battery, charging and
-two-controller signals. The single-controller gauge also has three styles.
+See controller charge at a glance. On Home or in games, an optional gauge shows
+one controller or splits the bar into two mirrored gauges with a dark centre
+and white charge tips. Connection and low-battery alerts appear briefly when
+Steam reports a change.
 
-Choose one charging behavior: **Off**, **Brief** (about three seconds when
-charging starts), **Continuous on Home**, or **Continuous everywhere**. Brief
-charging follows the separate brief-alert master switch and Home/in-game
-location. Continuous charging does not need brief alerts or the permanent
-gauge; it runs while Steam reports charging below 100%, then stops when charging
-ends. At 100% it shows a short completion cue. On a fresh installation, the
-permanent gauge and continuous charging both appear on Home only.
+Charging can play a short cue or a continuous blue-and-white animation that
+stops at 100%. Choose the animation styles, colours, brightness and where each
+signal appears. The GIF shows the two-controller gauge and continuous charging.
 
-Connection and low-battery signals are brief alerts too. Their location can be
-set to Off, Home, in game, or both. Low-battery warnings fire on a threshold
-crossing or the first low reading, not every poll. Brief signals and charging
-animation can yield to higher-priority displays; the final five minutes of a
-countdown are protected.
+![Two mirrored controller gauges followed by continuous charging](assets/readme-gifs/controller-battery.gif)
 
-![Controller connection, mirrored two-controller gauge, low-battery warning and charging motion](assets/readme-gifs/controller-battery.gif)
-
-Battery data comes from SteamUI's SteamInputManager service and controller state:
-a startup read, live notifications, and a two-second recovery poll. Live battery
-notifications take precedence over cached snapshots, so an older list cannot
-reset a real 41% reading to 100%. Unknown battery values are
-not displayed as zero. If there is no usable battery data, the gauge stays off.
-The Controllers panel distinguishes a service error from an empty controller
-list. A controller already present at startup does not replay its connection
-signal; a controller already charging does not trigger the brief charging cue.
-Disconnect and reconnect it to test a connection signal. Charging signals need
-both a reported charging state and a usable battery level.
-Charging support depends on the controller and connection type. See
-[controller research and test protocol](docs/CONTROLLERS_RESEARCH.md).
-
-Choose your own healthy, medium, low and charging/connection colours in
-**Controllers > Controller colours**. Controller-only brightness defaults to
-65% and can be adjusted from 10 to 100%. These settings apply to both players,
-brief controller animations and previews, without changing other light modes.
+Battery and charging data depend on the controller. Unknown levels are never
+invented; see the [controller test notes](docs/CONTROLLERS_RESEARCH.md).
 
 ## Light events
 

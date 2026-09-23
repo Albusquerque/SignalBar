@@ -10,6 +10,8 @@ def main() -> None:
     folder = Path(sys.argv[1])
     output = Path(sys.argv[2])
     duration = int(sys.argv[3])
+    max_width = int(sys.argv[4]) if len(sys.argv) > 4 else 500
+    palette_colors = int(sys.argv[5]) if len(sys.argv) > 5 else 96
     files = sorted(folder.glob("*.png"))
     if not files:
         raise SystemExit(f"No captured frames in {folder}")
@@ -20,12 +22,18 @@ def main() -> None:
     for file in files:
         with Image.open(file) as image:
             frame = image.convert("RGB")
-            if frame.width > 500:
-                frame.thumbnail((500, 700), Image.Resampling.LANCZOS)
+            if frame.width > max_width:
+                frame.thumbnail((max_width, max_width * 2), Image.Resampling.LANCZOS)
             if previous is not None and ImageChops.difference(frame, previous).getbbox() is None:
                 durations[-1] += duration
                 continue
-            frames.append(frame.quantize(colors=96, method=Image.Quantize.FASTOCTREE))
+            frames.append(
+                frame.quantize(
+                    colors=palette_colors,
+                    method=Image.Quantize.FASTOCTREE,
+                    dither=Image.Dither.FLOYDSTEINBERG,
+                )
+            )
             durations.append(duration)
             previous = frame
 

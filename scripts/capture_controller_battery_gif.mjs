@@ -10,10 +10,10 @@ const source = await fs.readFile(path.join(root, "assets/controller-motion-demo.
 const output = path.join(root, "assets/readme-gifs/controller-battery.gif");
 const scratch = await fs.mkdtemp(path.join(os.tmpdir(), "signalbar-controller-gif-"));
 const browser = await chromium.launch({ headless: true });
-const interval = 125;
+const interval = 150;
 
 try {
-  const page = await browser.newPage({ viewport: { width: 1024, height: 740 }, deviceScaleFactor: 1 });
+  const page = await browser.newPage({ viewport: { width: 1024, height: 740 }, deviceScaleFactor: 2 });
   await page.setContent('<!doctype html><html><body style="margin:0"><iframe sandbox="allow-scripts" style="display:block;border:0;width:100%;height:720px"></iframe></body></html>');
   await page.locator("iframe").evaluate((iframe, html) => {
     const csp = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'";
@@ -24,11 +24,8 @@ try {
   await crop.waitFor();
   let count = 0;
   const scenes = [
-    { scene: "connect", variant: 0, battery: 74, duration: 2400 },
-    { scene: "duo", variant: 2, battery: 41, duration: 3800 },
-    { scene: "low", variant: 0, battery: 14, duration: 2500 },
-    { scene: "charging", variant: 1, battery: 41, duration: 3300 },
-    { scene: "gauge", variant: 1, battery: 74, duration: 1300 },
+    { scene: "duo", variant: 2, battery: 41, duration: 3900 },
+    { scene: "charging", variant: 1, battery: 41, duration: 2700 },
   ];
   for (const { scene, variant, battery, duration } of scenes) {
     await frame.locator("#sb-motion-battery").evaluate((slider, value) => {
@@ -44,7 +41,7 @@ try {
       await crop.screenshot({ path: path.join(scratch, `${String(count++).padStart(4, "0")}.png`) });
     }
   }
-  execFileSync("python3", [path.join(root, "scripts/encode_readme_gif.py"), scratch, output, String(interval)], { stdio: "inherit" });
+  execFileSync("python3", [path.join(root, "scripts/encode_readme_gif.py"), scratch, output, String(interval), "700", "256"], { stdio: "inherit" });
   console.log(output);
 } finally {
   await browser.close();

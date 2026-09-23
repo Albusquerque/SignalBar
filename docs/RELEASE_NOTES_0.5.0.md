@@ -24,7 +24,7 @@ are preserved when upgrading.
   colours, and controller-only brightness. Preview buttons use sample data and
   work without a controller connected.
 
-![Controller connection, two-player gauge, low-battery and charging examples](https://raw.githubusercontent.com/Albusquerque/SignalBar/v0.5.0/assets/readme-gifs/controller-battery.gif)
+![Two mirrored controller gauges followed by continuous charging](https://raw.githubusercontent.com/Albusquerque/SignalBar/main/assets/readme-gifs/controller-battery.gif)
 
 ## Other improvements
 
@@ -70,5 +70,5 @@ depends on the controller and connection type. Automated tests cover startup,
 live updates, stale snapshots, disconnects, charging and priority rules, but
 there is not yet a verified compatibility list for every controller.
 
-For implementation and feature details, see the [README](https://github.com/Albusquerque/SignalBar/tree/v0.5.0#readme)
+For implementation and feature details, see the [README](https://github.com/Albusquerque/SignalBar#readme)
 and [full changelog](https://github.com/Albusquerque/SignalBar/blob/v0.5.0/CHANGELOG.md).
