@@ -19,8 +19,10 @@ FILES = [
 ]
 
 
-def iter_files():
+def iter_files(*, require_build=True):
     for relative in FILES:
+        if not require_build and relative == "dist/index.js":
+            continue
         path = ROOT / relative
         if not path.is_file():
             raise SystemExit(f"required release file is missing: {relative}")

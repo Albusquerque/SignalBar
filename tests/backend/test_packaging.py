@@ -10,7 +10,8 @@ class PackagingTests(unittest.TestCase):
         self.assertTrue((root / "py_modules/signalbar/backend/engine.py").is_file())
         self.assertTrue((root / "assets/readme-gifs/controller-battery.gif").is_file())
         from scripts.package_plugin import iter_files
-        packaged = {str(path.relative_to(root)) for path in iter_files()}
+        # CI tests run before the build creates dist/index.js.
+        packaged = {str(path.relative_to(root)) for path in iter_files(require_build=False)}
         self.assertIn("assets/readme-gifs/controller-battery.gif", packaged)
 
     def test_panel_order_and_lifecycle_guards(self):
