@@ -17,10 +17,9 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from signalbar.models import LED_COUNT, ProviderOutput, normalize_frame
-from signalbar.providers.weather_sequences import weather_sequence
+from signalbar.providers.weather_sequences import weather_loop_seconds, weather_sequence
 
 BLACK = (0, 0, 0)
-LOOP_SECONDS = 8.0
 MAX_SAMPLE_AGE_SECONDS = 3600.0
 REFRESH_SECONDS = 900.0
 RETRY_SECONDS = 300.0
@@ -29,7 +28,7 @@ VARIANT_NAMES = {
     "clear_day": ("Sun glints", "Solar bloom"),
     "clear_night": ("Quiet constellation", "Silver hush"),
     "rain": ("Bluewater", "Pearl rain"),
-    "cloud": ("Passing shadow", "Passing shadows"),
+    "cloud": ("Passing shadow", "Passing shadows", "Cross & gather", "Slow convergence"),
     "breaks": ("Sun through clouds", "Sun, fading clouds"),
     "breaks_night": ("Moon through clouds", "Moon, fading clouds"),
     "snow": ("Melting snowfall", "Snow takes hold"),
@@ -168,7 +167,7 @@ def dim_weather_pixel(pixel, brightness=65, shadow_cutoff=25):
 
 
 def weather_frame(condition, variant, elapsed, values):
-    """Render a beta.10 weather loop without a temperature overlay."""
+    """Render a weather loop without a temperature overlay."""
     if condition not in VARIANT_NAMES or type(variant) is not int or not 0 <= variant < len(VARIANT_NAMES[condition]):
         raise ValueError("unknown weather animation")
     raw = weather_sequence(condition, variant, elapsed)
@@ -276,7 +275,7 @@ class WeatherProvider:
             preview = self._preview
             sample = self._sample
             fetched = self._fetched_at
-        if preview and now - preview["started_at"] < LOOP_SECONDS:
+        if preview and now - preview["started_at"] < weather_loop_seconds(preview["condition"], preview["variant"]):
             return preview, preview["variant"], now - preview["started_at"], True
         if sample and fetched and now - fetched < MAX_SAMPLE_AGE_SECONDS:
             condition = sample["condition"]
@@ -316,6 +315,7 @@ class WeatherProvider:
                 "observed_at": sample["observed_at"] if sample else "",
                 "age_s": max(0.0, now - fetched) if fetched else None,
                 "preview_active": preview,
-                "preview_remaining_s": max(0.0, LOOP_SECONDS - elapsed) if preview else 0,
+                "preview_remaining_s": max(0.0, weather_loop_seconds(current["condition"], variant) - elapsed)
+                if preview else 0,
                 "colors": frame if frame is not None else normalize_frame([BLACK] * LED_COUNT),
                 "active_here": self.output(values, game_running, now).frame is not None}

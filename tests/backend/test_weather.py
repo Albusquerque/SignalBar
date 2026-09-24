@@ -18,7 +18,7 @@ from signalbar.providers.weather import (
     CONDITIONS, VARIANT_NAMES, WeatherProvider, condition_for_code,
     dim_weather_pixel, fetch_current, search_cities, weather_frame,
 )
-from signalbar.providers.weather_sequences import weather_sequence
+from signalbar.providers.weather_sequences import weather_loop_seconds, weather_sequence
 from signalbar.settings import SettingsStore
 from signalbar.settings.store import DEFAULTS, WEATHER_VARIANT_COUNTS
 
@@ -34,7 +34,8 @@ class WeatherTests(unittest.TestCase):
         for condition in CONDITIONS:
             for variant in range(len(VARIANT_NAMES[condition])):
                 unique = set()
-                for tick in range(80):
+                loop_seconds = weather_loop_seconds(condition, variant)
+                for tick in range(round(loop_seconds * 10)):
                     elapsed = tick / 10
                     frame = weather_frame(condition, variant, elapsed, raw)
                     self.assertEqual(len(frame), 17)
@@ -43,9 +44,50 @@ class WeatherTests(unittest.TestCase):
                     unique.add(frame)
                 self.assertGreater(len(unique), 4, (condition, variant))
                 self.assertEqual(weather_frame(condition, variant, 0, raw),
-                                 weather_frame(condition, variant, 8, raw))
+                                 weather_frame(condition, variant, loop_seconds, raw))
         with self.assertRaises(ValueError):
             weather_frame("rain", 2, 0, raw)
+
+    def test_new_cloud_patterns_and_existing_selections(self):
+        self.assertEqual(VARIANT_NAMES["cloud"], (
+            "Passing shadow", "Passing shadows", "Cross & gather", "Slow convergence"))
+        self.assertEqual(DEFAULTS["weather_cloud_variant"], 2)
+        self.assertEqual(weather_loop_seconds("cloud", 0), 8)
+        self.assertEqual(weather_loop_seconds("cloud", 1), 8)
+        self.assertEqual(weather_loop_seconds("cloud", 2), 11)
+        self.assertEqual(weather_loop_seconds("cloud", 3), 28)
+        self.assertNotEqual(weather_sequence("cloud", 2, 1.2), weather_sequence("cloud", 2, 5))
+        self.assertNotEqual(weather_sequence("cloud", 3, 2), weather_sequence("cloud", 3, 20))
+        for variant in (2, 3):
+            for tick in range(round(weather_loop_seconds("cloud", variant) * 10)):
+                frame = weather_sequence("cloud", variant, tick / 10)
+                self.assertTrue(all(red == green == blue for red, green, blue in frame))
+                self.assertTrue(all(0 <= pixel[0] <= 242 for pixel in frame))
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "settings.json"
+            self.assertEqual(SettingsStore(str(path)).all()["weather_cloud_variant"], 2)
+            for existing in (0, 1):
+                path.write_text(json.dumps({"weather_sequence_revision": 10,
+                                            "weather_cloud_variant": existing}), encoding="utf-8")
+                store = SettingsStore(str(path))
+                self.assertEqual(store.all()["weather_cloud_variant"], existing)
+                store.update({"weather_brightness": 70})
+                self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["weather_sequence_revision"], 11)
+            path.write_text(json.dumps({"weather_sequence_revision": 11,
+                                        "weather_cloud_variant": 3}), encoding="utf-8")
+            self.assertEqual(SettingsStore(str(path)).all()["weather_cloud_variant"], 3)
+
+    def test_long_cloud_preview_plays_one_complete_cycle(self):
+        now = [100.0]
+        provider = WeatherProvider(clock=lambda: now[0])
+        values = dict(DEFAULTS, weather_display="off")
+        for variant, duration in ((2, 11), (3, 28)):
+            self.assertTrue(provider.preview("cloud", variant))
+            now[0] += duration - .1
+            self.assertTrue(provider.status(values)["preview_active"])
+            self.assertAlmostEqual(provider.status(values)["preview_remaining_s"], .1)
+            now[0] += .1
+            self.assertFalse(provider.status(values)["preview_active"])
 
     def test_partly_cloudy_originals_remain_and_new_clouds_fade_to_black(self):
         self.assertEqual(len(VARIANT_NAMES["breaks"]), 2)
@@ -106,7 +148,7 @@ class WeatherTests(unittest.TestCase):
             self.assertEqual(values["weather_storm_variant"], 1)
             store.update({"weather_brightness": 60})
             saved = json.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual(saved["weather_sequence_revision"], 10)
+            self.assertEqual(saved["weather_sequence_revision"], 11)
             self.assertEqual(saved["weather_temperature_unit"], "fahrenheit")
             self.assertEqual(SettingsStore(str(path)).all()["weather_rain_variant"], 1)
 

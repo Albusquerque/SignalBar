@@ -1,4 +1,4 @@
-"""Deterministic beta.10 weather loops for SignalBar's 17 physical LEDs.
+"""Deterministic weather loops for SignalBar's 17 physical LEDs.
 
 Weather stays a background colour field with small, repeatable motion. No
 temperature pixels, external state, device access, or network calls live here.
@@ -9,6 +9,16 @@ from __future__ import annotations
 import math
 
 LED_COUNT = 17
+CLOUD_CROSS_GATHER_SECONDS = 11.0
+CLOUD_SLOW_CONVERGENCE_SECONDS = 28.0
+
+
+def weather_loop_seconds(condition, variant):
+    if condition == "cloud" and variant == 2:
+        return CLOUD_CROSS_GATHER_SECONDS
+    if condition == "cloud" and variant == 3:
+        return CLOUD_SLOW_CONVERGENCE_SECONDS
+    return 8.0
 
 # Fixed, irregular timing makes the ripple repeatable in previews and tests.
 RAIN_EVENTS = (
@@ -145,7 +155,100 @@ def _rain(frame, variant, time):
     return frame
 
 
+def _cloud_point(frame, index, intensity):
+    """Draw a neutral-white pixel; overlapping clouds keep the brighter one."""
+    if 0 <= index < LED_COUNT:
+        level = clamp(242 * max(0, min(1, intensity)))
+        frame[index] = [max(frame[index][0], level)] * 3
+
+
+def _cloud_cluster(frame, centre, width, levels):
+    left = math.floor(centre - (width - 1) / 2 + .5)
+    for offset in range(width):
+        _cloud_point(frame, left + offset, levels[offset])
+
+
+def _crossing_clouds(frame, time):
+    age = time % 4.4
+    envelope = min(1, age / .45, (4.4 - age) / .45)
+    _cloud_cluster(frame, 1 + age * 3.5, 2, (.74 * envelope, .9 * envelope))
+    _cloud_cluster(frame, 15 - age * 3.5, 2, (.95 * envelope, .68 * envelope))
+
+
+def _cross_and_gather(frame, time):
+    _crossing_clouds(frame, time)
+    if time < 3.3:
+        progress = max(0, (time - 1.45) / 1.85)
+        if progress:
+            _cloud_cluster(frame, 2 + progress * 6, 2, (.61, .85))
+            _cloud_cluster(frame, 14 - progress * 6, 2, (.84, .64))
+        return
+
+    age = time - 3.3
+    centre = 8 + 3.2 * math.sin(age * 1.06)
+    accent = 0
+    for at, side in ((.9, -1), (2.3, 1), (3.75, -1), (5.1, 1), (6.5, -1)):
+        arrival = age - at
+        if 0 <= arrival < 1.05:
+            start = centre + side * 4.6
+            position = start + (centre - start) * min(1, arrival / 1.05)
+            _cloud_point(frame, math.floor(position + .5), .65 + .22 * math.sin(math.pi * arrival / 1.05))
+            if arrival > .79:
+                accent = .18
+    _cloud_cluster(frame, centre, 3, (.71 + accent, .96, .76 + accent))
+
+
+def _slow_convergence(frame, time):
+    breath = .86 + .1 * math.sin(time * 1.4)
+    if time < 3.25:
+        _cloud_point(frame, math.floor(1 + 2 * time + .5), .73)
+        _cloud_point(frame, math.floor(14 - 2 * time + .5), .94)
+    elif time < 6.42:
+        age = time - 3.25
+        _cloud_cluster(frame, 7.5 + age, 2, (.7, .94))
+        _cloud_point(frame, math.floor(17 - 2 * age + .5), .8)
+    elif time < 11.4:
+        centre = 10.67 - .5 * (time - 6.42)
+        _cloud_cluster(frame, centre, 3, (.73 * breath, .98, .79 * breath))
+        if time > 8.1:
+            position = 1 + 2 * (time - 8.1)
+            _cloud_point(frame, math.floor(position + .5), .72 + .12 * smooth(10.6, 11.25, time))
+    elif time < 14.5:
+        centre = 8.18 + .5 * (time - 11.4)
+        _cloud_cluster(frame, centre, 3, (.76 * breath, .98, .72 * breath))
+        _cloud_point(frame, math.floor(16 - 2 * (time - 11.4) + .5), .77)
+    elif time < 18.2:
+        age = time - 14.5
+        _cloud_cluster(frame, 9.73 - age, 2, (.92, .72))
+        _cloud_point(frame, math.floor(9.73 + 2 * age + .5), .66)
+        _cloud_point(frame, math.floor(-1 + 2 * age + .5), .83)
+    elif time < 23.2:
+        age = time - 18.2
+        _cloud_cluster(frame, 6.03 + .5 * age, 3, (.73 * breath, .98, .77 * breath))
+        if age > .65:
+            _cloud_point(frame, math.floor(2 * (age - .65) + .5), .72)
+            _cloud_point(frame, math.floor(16 - 2 * (age - .65) + .5), .84)
+    else:
+        age = time - 23.2
+        fade = 1 - smooth(26.9, 28, time)
+        _cloud_cluster(frame, 8.53 - .5 * age, 3,
+                       (.73 * breath * fade, .98 * fade, .77 * breath * fade))
+        if age > 1:
+            _cloud_point(frame, math.floor(16 - 2 * (age - 1) + .5), .72 * fade)
+        next_clouds = smooth(26.9, 28, time)
+        _cloud_point(frame, 1, .73 * next_clouds)
+        _cloud_point(frame, 14, .94 * next_clouds)
+
+
 def _cloud(frame, variant, time):
+    if variant == 2:
+        _cross_and_gather(frame, time)
+        return
+    if variant == 3:
+        _slow_convergence(frame, time)
+        return
+
+    # Keep the two 0.6.0 cloud patterns unchanged for existing selections.
     def shadow(centre,power=1):
         for index in range(LED_COUNT):
             dip = math.exp(-((index-centre)/3.1)**2)*117*power
@@ -158,7 +261,7 @@ def _cloud(frame, variant, time):
         frame[index] = [level]*3
     if variant == 0:
         shadow(-5+time*3.25)
-    else:
+    elif variant == 1:
         # Two distinct passes, not a central collision or a ping-pong bounce.
         if .2 <= time < 3.65:
             envelope = smooth(.2,.7,time)*(1-smooth(3.15,3.65,time))
@@ -252,7 +355,7 @@ def _storm(frame, variant, time):
 def weather_sequence(condition, variant, time):
     """Return one logical RGB frame, before Weather-only brightness/cutoff."""
     frame = [[0,0,0] for _ in range(LED_COUNT)]
-    time = max(0,time)%8
+    time = max(0, time) % weather_loop_seconds(condition, variant)
     if condition == "clear_day":
         _sun(frame,variant,time)
     elif condition == "clear_night":

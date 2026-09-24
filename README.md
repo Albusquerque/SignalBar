@@ -69,9 +69,11 @@ invented; see the [controller test notes](docs/CONTROLLERS_RESEARCH.md).
 ### Weather
 
 Choose a city to give the light bar a living weather scene on Home, in games,
-or everywhere. Sixteen selectable loops cover clear skies, rain, cloud,
+or everywhere. Eighteen selectable loops cover clear skies, rain, cloud,
 partly cloudy day and night, snow, and storms. **Snow takes hold** is the
 default snow scene; all animations can be previewed without network access.
+Cloud has four choices, including the new **Cross & gather** (the fresh-install
+default) and the longer **Slow convergence**. Existing Cloud selections are kept.
 
 ![Weather animations on the Steam Machine light bar](assets/readme-gifs/weather.gif)
 
@@ -224,7 +226,7 @@ coarse battery data is not displayed as an exact percentage.
 ### Weather
 
 - Location selected manually by city or postal code; no automatic geolocation
-- On Home, In game, or Everywhere, with sixteen selectable 17-LED animations
+- On Home, In game, or Everywhere, with eighteen selectable 17-LED animations
 - Independent optional SteamOS top-bar icon and °C/°F temperature
 - Weather brightness and faint-pixel cutoff for the physical diffuser
 - Weather previews work without a city or network connection
@@ -292,7 +294,8 @@ npm run build
 npm run package
 ```
 
-The installable archive is written to `out/SignalBar-v0.6.0.zip`.
+The local 0.6.1 build writes `out/SignalBar-v0.6.1.zip`. The public download
+above remains the published 0.6.0 release until 0.6.1 is released.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for provider, arbitration, guard, and
 hardware-rendering details. Release history is available in

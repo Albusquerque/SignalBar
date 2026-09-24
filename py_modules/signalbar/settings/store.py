@@ -71,11 +71,11 @@ DEFAULTS = {
     "weather_temperature_unit": "celsius",
     "weather_brightness": 100,
     "weather_shadow_cutoff": 0,
-    "weather_sequence_revision": 10,
+    "weather_sequence_revision": 11,
     "weather_clear_day_variant": 0,
     "weather_clear_night_variant": 0,
     "weather_rain_variant": 0,
-    "weather_cloud_variant": 1,
+    "weather_cloud_variant": 2,
     "weather_breaks_variant": 0,
     "weather_breaks_night_variant": 0,
     "weather_snow_variant": 1,
@@ -114,7 +114,7 @@ CONTROLLER_VARIANTS = {
     "controller_duo_variant": {"twin", "focus", "double-welcome"},
 }
 WEATHER_VARIANT_KEYS = tuple(key for key in DEFAULTS if key.startswith("weather_") and key.endswith("_variant"))
-WEATHER_VARIANT_COUNTS = {"clear_day": 2, "clear_night": 2, "rain": 2, "cloud": 2,
+WEATHER_VARIANT_COUNTS = {"clear_day": 2, "clear_night": 2, "rain": 2, "cloud": 4,
                           "breaks": 2, "breaks_night": 2, "snow": 2, "storm": 2}
 
 
@@ -150,7 +150,7 @@ class SettingsStore:
                     for key in DEFAULTS:
                         if key in raw:
                             self._data[key] = raw[key]
-                    if raw.get("weather_sequence_revision") != 10:
+                    if raw.get("weather_sequence_revision") not in (10, 11):
                         migration = {
                             "clear_night": {0: 0, 3: 1},
                             "rain": {2: 0, 3: 1},
@@ -159,7 +159,7 @@ class SettingsStore:
                         for condition, variants in migration.items():
                             key = f"weather_{condition}_variant"
                             self._data[key] = variants.get(raw.get(key), 0)
-                        self._data["weather_sequence_revision"] = 10
+                        self._data["weather_sequence_revision"] = 11
                     if "controller_charging_mode" not in raw:
                         display = raw.get("controller_charging_display")
                         if display == "home":
@@ -251,7 +251,7 @@ class SettingsStore:
                 self._data[key] = max(lower, min(upper, int(round(float(self._data[key])))))
             except (TypeError, ValueError, OverflowError):
                 self._data[key] = DEFAULTS[key]
-        self._data["weather_sequence_revision"] = 10
+        self._data["weather_sequence_revision"] = 11
         for key in WEATHER_VARIANT_KEYS:
             try:
                 value = int(self._data[key])

@@ -1,6 +1,7 @@
-# Weather in SignalBar 0.6.0
+# Weather in SignalBar 0.6.1
 
-This document describes Weather in the published `v0.6.0` release.
+This document describes Weather in the local `v0.6.1` build. The latest
+published release remains `v0.6.0`.
 
 In **SignalBar settings → Weather**, search for a city (and optional country), choose a result, then enable weather **On Home**, **In game**, or **Everywhere**. Location is never detected automatically. Current conditions come from Open-Meteo, refresh about every 15 minutes, and are discarded after one hour without a successful refresh. No API key is required. A preview works without a city or network but does not test live weather.
 
@@ -8,7 +9,7 @@ Permanent weather and the permanent controller battery gauge are mutually exclus
 
 ## Animations
 
-The loops offer sixteen choices: two sun, two moon-and-stars, two rain, two cloud, two partly-cloudy day, two partly-cloudy night, two snow, and two storm animations. Bluewater holds a blue field. Pearl rain uses a dimmer white field and an extra blue accent at each impact. The original **Sun/Moon through clouds** loops remain selectable. Each has an additional **fading clouds** variant: neutral-white cloud LEDs dim to off while the yellow sun or pale moon appears, then return. No dark brown or blue cloud colour is introduced. Melting snowfall uses paired and single melt-and-refill gaps; Snow takes hold accumulates white flakes until the bar is covered, then restarts. Snow takes hold is the fresh-install choice. Pulse and echoes has two lightning phrases. Each loop lasts eight seconds.
+The loops offer eighteen choices: two sun, two moon-and-stars, two rain, four cloud, two partly-cloudy day, two partly-cloudy night, two snow, and two storm animations. **Cross & gather** crosses two pairs, then lets a three-LED cloud gather smaller clouds; it is the fresh-install Cloud choice. **Slow convergence** is a longer series of mergers and separations. The two earlier Cloud patterns remain selectable, and saved choices survive the update. Bluewater holds a blue field. Pearl rain uses a dimmer white field and an extra blue accent at each impact. The original **Sun/Moon through clouds** loops remain selectable. Each has an additional **fading clouds** variant: neutral-white cloud LEDs dim to off while the yellow sun or pale moon appears, then return. No dark brown or blue cloud colour is introduced. Melting snowfall uses paired and single melt-and-refill gaps; Snow takes hold accumulates white flakes until the bar is covered, then restarts. Snow takes hold is the fresh-install snow choice. Pulse and echoes has two lightning phrases. The new Cloud loops last eleven and twenty-eight seconds respectively, including in the preview. All other loops last eight seconds.
 
 Weather brightness and faint-LED cutoff still apply. The removed temperature colour signatures, thermometer, Soft weather halos and Fixed colour test no longer appear in the settings or rendering path. The °C/°F choice applies only to the SteamOS top-bar number. Existing values for removed LED settings are discarded on the next settings save. Existing selected Rain, Moon and Storm variants migrate to the retained versions where possible. This is a software palette, not a measured hardware colour calibration.
 
