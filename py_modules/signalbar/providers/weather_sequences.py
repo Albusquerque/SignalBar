@@ -9,8 +9,8 @@ from __future__ import annotations
 import math
 
 LED_COUNT = 17
-CLOUD_CROSS_GATHER_SECONDS = 11.0
-CLOUD_SLOW_CONVERGENCE_SECONDS = 28.0
+CLOUD_CROSS_GATHER_SECONDS = 20.0
+CLOUD_SLOW_CONVERGENCE_SECONDS = 48.0
 
 
 def weather_loop_seconds(condition, variant):
@@ -176,6 +176,9 @@ def _crossing_clouds(frame, time):
 
 
 def _cross_and_gather(frame, time):
+    # Preserve the approved choreography while giving each crossing and
+    # gathering beat more time to be legible on the physical diffuser.
+    time *= 11 / CLOUD_CROSS_GATHER_SECONDS
     _crossing_clouds(frame, time)
     if time < 3.3:
         progress = max(0, (time - 1.45) / 1.85)
@@ -199,45 +202,39 @@ def _cross_and_gather(frame, time):
 
 
 def _slow_convergence(frame, time):
-    breath = .86 + .1 * math.sin(time * 1.4)
-    if time < 3.25:
-        _cloud_point(frame, math.floor(1 + 2 * time + .5), .73)
-        _cloud_point(frame, math.floor(14 - 2 * time + .5), .94)
-    elif time < 6.42:
-        age = time - 3.25
-        _cloud_cluster(frame, 7.5 + age, 2, (.7, .94))
-        _cloud_point(frame, math.floor(17 - 2 * age + .5), .8)
-    elif time < 11.4:
-        centre = 10.67 - .5 * (time - 6.42)
-        _cloud_cluster(frame, centre, 3, (.73 * breath, .98, .79 * breath))
-        if time > 8.1:
-            position = 1 + 2 * (time - 8.1)
-            _cloud_point(frame, math.floor(position + .5), .72 + .12 * smooth(10.6, 11.25, time))
-    elif time < 14.5:
-        centre = 8.18 + .5 * (time - 11.4)
-        _cloud_cluster(frame, centre, 3, (.76 * breath, .98, .72 * breath))
-        _cloud_point(frame, math.floor(16 - 2 * (time - 11.4) + .5), .77)
-    elif time < 18.2:
-        age = time - 14.5
-        _cloud_cluster(frame, 9.73 - age, 2, (.92, .72))
-        _cloud_point(frame, math.floor(9.73 + 2 * age + .5), .66)
-        _cloud_point(frame, math.floor(-1 + 2 * age + .5), .83)
-    elif time < 23.2:
-        age = time - 18.2
-        _cloud_cluster(frame, 6.03 + .5 * age, 3, (.73 * breath, .98, .77 * breath))
-        if age > .65:
-            _cloud_point(frame, math.floor(2 * (age - .65) + .5), .72)
-            _cloud_point(frame, math.floor(16 - 2 * (age - .65) + .5), .84)
+    if time < 2:
+        # Two small clouds approach from opposite sides before merging.
+        _cloud_point(frame, math.floor(2 + time * 2.25 + .5), .76)
+        _cloud_point(frame, math.floor(14 - time * 2.25 + .5), .93)
+        return
+
+    if time < 15:
+        # One additional LED joins every ~1.9 seconds, up to eight. A small
+        # incoming point alternates sides; it never makes a ninth LED.
+        growth = (time - 2) / (13 / 7)
+        width = min(8, 2 + math.floor(growth))
+        centre = 8 + .5 * math.sin(time * .4)
+        levels = [min(.94, .64 + .28 * (1 - abs(i - (width - 1) / 2) / 5)
+                      + .035 * math.sin(time * 1.3 + i)) for i in range(width)]
+        _cloud_cluster(frame, centre, width, levels)
+        if width < 8:
+            progress = growth % 1
+            side = -1 if math.floor(growth) % 2 else 1
+            start = centre + side * 7
+            destination = centre + side * (width / 2 + .5)
+            position = start + (destination - start) * min(1, progress / .94)
+            _cloud_point(frame, math.floor(position + .5), .72 * smooth(0, .2, progress))
+        return
+
+    if time < 25:
+        centre = 8 - (time - 15) * .45  # Eight LEDs reach the left edge.
+    elif time < 39:
+        centre = 3.5 + (time - 25) * (9 / 14)  # Then the right edge.
     else:
-        age = time - 23.2
-        fade = 1 - smooth(26.9, 28, time)
-        _cloud_cluster(frame, 8.53 - .5 * age, 3,
-                       (.73 * breath * fade, .98 * fade, .77 * breath * fade))
-        if age > 1:
-            _cloud_point(frame, math.floor(16 - 2 * (age - 1) + .5), .72 * fade)
-        next_clouds = smooth(26.9, 28, time)
-        _cloud_point(frame, 1, .73 * next_clouds)
-        _cloud_point(frame, 14, .94 * next_clouds)
+        centre = 12.5 + (time - 39)  # Exit completely beyond the right edge.
+    levels = [.67 + .25 * (1 - abs(i - 3.5) / 4)
+              + .035 * math.sin(time * .68 + i * .75) for i in range(8)]
+    _cloud_cluster(frame, centre, 8, levels)
 
 
 def _cloud(frame, variant, time):

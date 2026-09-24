@@ -3,13 +3,14 @@
 ## 0.6.1 - LOCAL BUILD - 2026-09-24
 
 - Add **Cross & gather** and **Slow convergence** to Cloud Weather. The first
-  crosses two pairs before a drifting three-LED cloud gathers smaller ones;
-  the second follows several mergers, separations and arrivals over a longer
-  scene. Both use neutral white at varied brightness, without coloured tails.
+  crosses two pairs before a drifting three-LED cloud gathers smaller ones at
+  a relaxed pace; the second grows into an eight-LED cloud, drifts left,
+  returns right, then exits the bar. Both use neutral white at varied
+  brightness, without coloured tails.
 - Keep **Passing shadow** and **Passing shadows** unchanged and selectable.
   Cross & gather is the default on fresh installs; existing Cloud choices
   remain selected after updating from 0.6.0.
-- Play the entire 11- or 28-second loop when previewing a new Cloud pattern.
+- Play the entire 20- or 48-second loop when previewing a new Cloud pattern.
   Other Weather loops remain eight seconds. No GitHub release in this build.
 
 ## 0.6.0 - 2026-09-24

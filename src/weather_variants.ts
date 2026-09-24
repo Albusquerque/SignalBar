@@ -27,8 +27,8 @@ export const WEATHER_VARIANTS: Record<WeatherCondition, { label: string; detail:
   cloud: [
     { label: "Passing shadow", detail: "A wide shadow crosses a continuous soft-white sky, with a brief silver edge." },
     { label: "Passing shadows", detail: "A second shadow follows from the other side without crossing at the centre." },
-    { label: "Cross & gather", detail: "Two cloud pairs cross; a three-LED cloud then drifts and gathers smaller ones. 11-second loop." },
-    { label: "Slow convergence", detail: "Single clouds approach, merge and separate across a longer 28-second scene." },
+    { label: "Cross & gather", detail: "Two cloud pairs cross, then a three-LED cloud slowly gathers smaller ones. 20-second loop." },
+    { label: "Slow convergence", detail: "Clouds grow into one eight-LED cloud. It drifts left, returns right, then leaves the bar. 48-second loop." },
   ],
   breaks: [
     { label: "Sun through clouds", detail: "The familiar sun opens through a soft-white cloud field, then closes." },

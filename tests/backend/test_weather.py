@@ -54,10 +54,17 @@ class WeatherTests(unittest.TestCase):
         self.assertEqual(DEFAULTS["weather_cloud_variant"], 2)
         self.assertEqual(weather_loop_seconds("cloud", 0), 8)
         self.assertEqual(weather_loop_seconds("cloud", 1), 8)
-        self.assertEqual(weather_loop_seconds("cloud", 2), 11)
-        self.assertEqual(weather_loop_seconds("cloud", 3), 28)
+        self.assertEqual(weather_loop_seconds("cloud", 2), 20)
+        self.assertEqual(weather_loop_seconds("cloud", 3), 48)
         self.assertNotEqual(weather_sequence("cloud", 2, 1.2), weather_sequence("cloud", 2, 5))
         self.assertNotEqual(weather_sequence("cloud", 3, 2), weather_sequence("cloud", 3, 20))
+        lit = lambda elapsed: [index for index, pixel in enumerate(
+            weather_sequence("cloud", 3, elapsed)) if pixel[0] > 0]
+        self.assertEqual(lit(0), [2, 14])
+        self.assertEqual(lit(15), list(range(5, 13)))
+        self.assertEqual(lit(25), list(range(8)))
+        self.assertEqual(lit(39), list(range(9, 17)))
+        self.assertEqual(lit(47), [])
         for variant in (2, 3):
             for tick in range(round(weather_loop_seconds("cloud", variant) * 10)):
                 frame = weather_sequence("cloud", variant, tick / 10)
@@ -81,7 +88,7 @@ class WeatherTests(unittest.TestCase):
         now = [100.0]
         provider = WeatherProvider(clock=lambda: now[0])
         values = dict(DEFAULTS, weather_display="off")
-        for variant, duration in ((2, 11), (3, 28)):
+        for variant, duration in ((2, 20), (3, 48)):
             self.assertTrue(provider.preview("cloud", variant))
             now[0] += duration - .1
             self.assertTrue(provider.status(values)["preview_active"])
