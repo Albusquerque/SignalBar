@@ -1,9 +1,8 @@
 # Weather in SignalBar 0.6.1
 
-This document describes Weather in the local `v0.6.1` build. The latest
-published release remains `v0.6.0`.
+This document describes Weather in the published release.
 
-In **SignalBar settings → Weather**, search for a city (and optional country), choose a result, then enable weather **On Home**, **In game**, or **Everywhere**. Location is never detected automatically. Current conditions come from Open-Meteo, refresh about every 15 minutes, and are discarded after one hour without a successful refresh. No API key is required. A preview works without a city or network but does not test live weather.
+In **SignalBar settings → Weather**, search for a city (and optional country using its full name, not a two-letter code), choose a result, then enable weather **On Home**, **In game**, or **Everywhere**. Location is never detected automatically. Current conditions come from Open-Meteo, refresh about every 15 minutes, and are discarded after one hour without a successful refresh. No API key is required. A preview works without a city or network but does not test live weather.
 
 Permanent weather and the permanent controller battery gauge are mutually exclusive. The controller gauge remains the fresh-install default; choosing weather turns it off, and choosing the gauge turns weather off. Brief controller alerts, light events, countdowns, and Steam's LED ownership guard keep their existing priorities.
 

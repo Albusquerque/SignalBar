@@ -94,7 +94,8 @@ class PackagingTests(unittest.TestCase):
         self.assertNotIn("<PalettePreview", events_panel)
         self.assertIn('<EventPreviewStrip status={status} kinds={[kind]} />', events_panel)
         self.assertIn('setSetting("recording_marker_isolation", value)', panel)
-        self.assertIn('label="Country (optional)"', panel)
+        self.assertIn('label="Country (full name, optional)"', panel)
+        self.assertIn('Two-letter codes do not work here.', panel)
         self.assertIn('label="Top-bar temperature unit"', panel)
         self.assertIn('<EventPreviewStrip status={status}', panel)
 

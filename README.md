@@ -6,7 +6,7 @@ Make your Steam Machine's 17-pixel light bar useful and a little more
 expressive. Choose a persistent display, then let playtime warnings and short
 Steam moments take the stage before your display returns.
 
-[Download SignalBar v0.6.0](https://github.com/Albusquerque/SignalBar/releases/tag/v0.6.0)
+[Download SignalBar v0.6.1](https://github.com/Albusquerque/SignalBar/releases/tag/v0.6.1)
 
 [Try the interactive SignalBar preview before installing](https://albusquerque.github.io/signalbar-concept/)
 
@@ -85,7 +85,8 @@ are mapped to LEDs.
 
 <img src="assets/weather-topbar-photo-large.png" alt="Weather icon and temperature beside the SteamOS clock on a real Steam Machine" width="700">
 
-Select a city before enabling live weather. SignalBar fetches current
+Select a city before enabling live weather. If you enter a country, use its
+full name (for example France), not a two-letter code. SignalBar fetches current
 conditions from Open-Meteo about every 15 minutes, without an API key or
 automatic location detection. Weather and the permanent controller gauge are
 mutually exclusive; the controller gauge remains the fresh-install default.
@@ -145,8 +146,8 @@ SignalBar follows a strict order:
 ### Decky Loader
 
 1. Install [Decky Loader](https://decky.xyz/) and enable Developer Mode.
-2. Download `SignalBar-v0.6.0.zip` from the
-   [v0.6.0 release](https://github.com/Albusquerque/SignalBar/releases/tag/v0.6.0).
+2. Download `SignalBar-v0.6.1.zip` from the
+   [v0.6.1 release](https://github.com/Albusquerque/SignalBar/releases/tag/v0.6.1).
    Do not extract it.
 3. Open **Decky Settings > Developer > Install Plugin from ZIP**.
 4. Select the downloaded archive.
@@ -294,8 +295,7 @@ npm run build
 npm run package
 ```
 
-The local 0.6.1 build writes `out/SignalBar-v0.6.1.zip`. The public download
-above remains the published 0.6.0 release until 0.6.1 is released.
+The installable archive is written to `out/SignalBar-v0.6.1.zip`.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for provider, arbitration, guard, and
 hardware-rendering details. Release history is available in

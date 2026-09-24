@@ -567,7 +567,7 @@ function WeatherPanel({ status, setStatus }: { status: Status; setStatus: (next:
       const response = await searchWeatherCities(country ? `${city}, ${country}` : city);
       setCityResults(response.results);
       if (response.error) setMessage(`City search failed: ${response.error}`);
-      else if (!response.results.length) setMessage("No matching city. The country must be its full name or two-letter code; try searching without it too.");
+      else if (!response.results.length) setMessage("No matching city. Enter the full country name, or try searching without it.");
     } catch (error) {
       setCityResults([]);
       setMessage(`City search failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -617,8 +617,8 @@ function WeatherPanel({ status, setStatus }: { status: Status; setStatus: (next:
       </div></PanelSectionRow>
       <PanelSectionRow><TextField label="City or postal code" value={cityQuery} onChange={(event) => setCityQuery(event.currentTarget.value)}
         description="Enter a city name or postal code." /></PanelSectionRow>
-      <PanelSectionRow><TextField label="Country (optional)" value={countryQuery} onChange={(event) => setCountryQuery(event.currentTarget.value)}
-        description="Full name or two-letter code, for example France or FR." /></PanelSectionRow>
+      <PanelSectionRow><TextField label="Country (full name, optional)" value={countryQuery} onChange={(event) => setCountryQuery(event.currentTarget.value)}
+        description="Use the full country name, for example France. Two-letter codes do not work here." /></PanelSectionRow>
       <PanelSectionRow><ButtonItem label="Find city" disabled={searching || cityQuery.trim().length < 2}
         onClick={() => void findCity()}>{searching ? "Searching…" : "Search"}</ButtonItem></PanelSectionRow>
       {cityResults.map((city, index) => <PanelSectionRow key={`${city.latitude}:${city.longitude}:${index}`}>

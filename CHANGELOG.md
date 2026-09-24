@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.1 - LOCAL BUILD - 2026-09-24
+## 0.6.1 - 2026-09-24
 
 - Add **Cross & gather** and **Slow convergence** to Cloud Weather. The first
   crosses two pairs before a drifting three-LED cloud gathers smaller ones at
@@ -11,7 +11,9 @@
   Cross & gather is the default on fresh installs; existing Cloud choices
   remain selected after updating from 0.6.0.
 - Play the entire 20- or 48-second loop when previewing a new Cloud pattern.
-  Other Weather loops remain eight seconds. No GitHub release in this build.
+  Other Weather loops remain eight seconds.
+- Clarify Weather's optional Country field: enter the full country name, not a
+  two-letter code. Update the no-results hint to match.
 
 ## 0.6.0 - 2026-09-24
 
@@ -124,7 +126,8 @@ Official release. Changes since 0.5.1:
 
 ## 0.6.0-beta.2 - LOCAL ONLY - 2026-09-23
 
-- Add an optional country field to city search. Open-Meteo accepts a full country name or two-letter code after the city name.
+- Add an optional country field to city search. Use the full country name after
+  the city name; two-letter codes do not return results in this search.
 - Return a clear backend diagnostic when city search fails, so a Decky/network error is distinguishable from an empty result.
 - Exercise the real asynchronous Decky search entry point in automated tests and verify live city plus weather responses locally. Steam Machine networking still needs device validation.
 
