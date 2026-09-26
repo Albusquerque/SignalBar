@@ -90,7 +90,7 @@ class FeedbackTests(unittest.TestCase):
             finally:
                 engine.stop()
 
-    def test_per_game_modes_persist_fallback_and_never_override_disabled(self):
+    def test_per_game_modes_persist_fallback_and_never_override_global_off_modes(self):
         with tempfile.TemporaryDirectory() as folder:
             path = str(Path(folder) / "settings.json")
             settings = SettingsStore(path)
@@ -116,6 +116,8 @@ class FeedbackTests(unittest.TestCase):
             self.assertEqual(restored.display_for(42)["mode"], "performance")
             restored.update({"mode": "disabled"})
             self.assertEqual(restored.display_for(42)["mode"], "disabled")
+            restored.update({"mode": "events"})
+            self.assertEqual(restored.display_for(42)["mode"], "events")
             restored.update({"mode": "performance"})
             self.assertEqual(restored.display_for(99)["mode"], "artwork")
             restored.update_display(99, "inherit")

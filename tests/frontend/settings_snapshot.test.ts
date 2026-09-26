@@ -26,6 +26,7 @@ const sampleStatus = {
     controller_gauge_brightness: 65,
     controller_colour_normal: [0, 200, 25], controller_colour_medium: [240, 120, 0],
     controller_colour_low: [220, 12, 24], controller_colour_charging: [0, 80, 180],
+    pong: { best_streak: 12 }, pong_vibration_enabled: false,
     weather_display: "off", weather_location: null, weather_topbar_enabled: false,
     weather_brightness: 65, weather_shadow_cutoff: 25,
     weather_clear_day_variant: 0, weather_clear_night_variant: 0, weather_rain_variant: 0,
@@ -37,11 +38,11 @@ const sampleStatus = {
 test("debug snapshot includes every settings group and distinguishes defaults from the running game's choices", () => {
   const snapshot = buildSettingsSnapshot(sampleStatus);
   assert.deepEqual(snapshot.map((section) => section.title),
-    ["Display", "Artwork", "Performance", "Playtime", "Light events", "Controllers", "Weather", "Advanced"]);
+    ["Display", "Artwork", "Performance", "Playtime", "Light events", "Controllers", "PongBar", "Weather", "Advanced"]);
   const text = snapshot.flatMap((section) => section.lines).join("\n");
   for (const expected of ["Example Game", "Library Hero", "Library Header", "83%", "CPU + GPU",
     "Balanced", "Mirrored", "#0C2238", "2 h", "Centre echo", "Return + confetti",
-    "Expanding echoes", "Continuous on Home", "Bright tip", "#00C819", "Weather LED brightness 65%", "Extra dark LEDs 2"]) {
+    "Expanding echoes", "Continuous on Home", "Bright tip", "#00C819", "Best solo streak 12", "Weather LED brightness 65%", "Extra dark LEDs 2"]) {
     assert.ok(text.includes(expected), expected);
   }
   assert.ok(!text.includes("/private/device/path"));
@@ -58,6 +59,15 @@ test("snapshot shows Home defaults without inventing a game-specific profile", (
   const snapshot = buildSettingsSnapshot(status);
   assert.match(snapshot[0].lines[1], /^Home/);
   assert.match(snapshot[1].lines[1], /^This game: none/);
+});
+
+test("snapshot names the Light Events only display mode", () => {
+  const status = { ...sampleStatus,
+    game: { appid: 42, title: "StripMine" },
+    default_mode: "events", mode: "events", display_override: "performance",
+  } as Status;
+  const snapshot = buildSettingsSnapshot(status);
+  assert.ok(snapshot[0].lines[0].includes("Light Events only"));
 });
 
 test("weather snapshot lists retained loops without removed temperature controls", () => {

@@ -14,6 +14,7 @@ FILES = [
     "ARCHITECTURE.md", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md", "dist/index.js",
     "docs/CONTROLLERS_RESEARCH.md",
     "docs/WEATHER.md",
+    "docs/PONGBAR_ALPHA.md",
     "assets/signalbar-product-hero-v4.png",
     "assets/signalbar-artwork-mode-v1.png",
     "assets/signalbar-performance-mode-v1.png",

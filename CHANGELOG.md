@@ -1,5 +1,58 @@
 # Changelog
 
+## 0.7.0 - 2026-09-26
+
+Official release. Changes since 0.6.1:
+
+### Light Events only and StripMine compatibility
+
+- Add **Light Events only** as a fourth display mode. It leaves the bar untouched between Steam notifications, achievements, screenshots, and recording animations. Saved Artwork and Performance profiles remain dormant until another display mode is selected.
+- Answer [issue #1](https://github.com/Albusquerque/SignalBar/issues/1): Light Events can now run without enabling Artwork or Performance.
+- Add cooperative Light-event handoff for StripMine. SignalBar publishes a short renewable lease, waits briefly for StripMine to yield, plays the event, restores the exact pre-event frame, then releases the lease so StripMine can resume automatically.
+- Keep the handoff fail-safe. The lease expires after a crash, and StripMine verifies the restored LED signature before reclaiming the bar. Local arbitration and lifecycle tests pass; the physical transition still requires Steam Machine validation.
+
+### PongBar
+
+- Add PongBar as an opt-in 17-LED timing game on Steam Home, with solo and two-player modes, controller assignment, touch fallback, saved best streak, progressive speed, and colour levels.
+- Add a 40 x 18 dot-matrix scoreboard, event animations, a full-screen score view, and live input and backend timing diagnostics.
+- Keep vibration experimental and disabled by default. Native controller input, physical LED timing, and vibration still require device-specific validation.
+
+### Reliability
+
+- Restore Python 3.9 compatibility for the Decky backend entry point.
+- Preserve existing settings when upgrading and keep all higher-priority countdown, alert, and native ownership rules intact.
+
+## 0.7.0-alpha.5 - LOCAL ONLY - 2026-09-26
+
+- Add **Light Events only** as a fourth display mode. It leaves the bar untouched between Steam notification, achievement, screenshot, and recording animations; saved Artwork and Performance profiles remain dormant until another display mode is selected.
+- Add cooperative Light-event handoff for StripMine. SignalBar publishes a short renewable lease and waits for StripMine's acknowledgement before its first event frame, restores the exact pre-event frame, then releases the lease so StripMine can resume automatically. When no compatible companion is installed, the event proceeds after a brief timeout.
+- Keep the handoff fail-safe: the lease expires after a crash, and StripMine must still verify the restored LED signature before reclaiming the bar. Local arbitration and lifecycle tests pass; the physical transition still requires Steam Machine validation.
+- Restore Python 3.9 compatibility for the Decky backend entry point used by the PongBar alpha.
+
+## 0.7.0-alpha.4 - LOCAL ONLY - 2026-09-24
+
+- Add an animated 40 x 18 dot matrix scoreboard to PongBar. Solo shows the return count, best streak and remaining lives; duel shows both players' scores. The current 17 LED frame also appears along the bottom of the matrix.
+- Add pinball-inspired pixel sequences tied to game events: serve countdown, return chase, perfect-hit burst, colour-level jackpot sweep, point burst and final celebration. Keep the numeric score visible during every sequence.
+- Add a dedicated on-screen PongBar score view, reachable from the PongBar settings and the SignalBar quick panel while a game is active or its result is showing. On-screen Hit controls are available there for touch play. The normal quick panel also shows the matrix during a session.
+
+## 0.7.0-alpha.3 - LOCAL ONLY - 2026-09-24
+
+- Add live PongBar input diagnostics for each observed SteamUI controller: last button, press count, latest backend response in milliseconds, rolling average and maximum over 20 responses, and RPC failures. Measure a lightweight backend probe before play and the actual hit RPC during play. Add a manual backend probe for setups where no controller appears and measure on-screen hits too.
+- Show the backend's time from an accepted hit to a completed PongBar LED device write. This is software timing; it cannot measure the light's physical appearance through the diffuser. Keep the diagnostic available without starting a game.
+
+## 0.7.0-alpha.2 - LOCAL ONLY - 2026-09-24
+
+- Add SteamUI controller button events as the default PongBar input path. Press any button on each controller to identify it, then assign the players and choose the return button. Keep the browser Gamepad API as an alternative when SteamUI exposes it.
+- Explain why controller Start is disabled and label the on-screen option as a full PongBar game. The earlier alpha relied only on the browser Gamepad API, which exposed no controller on the reported Steam Machine setup.
+- Keep vibration experimental and limited to the browser Gamepad API. Native SteamUI button capture, play with the panel closed, and the physical LED timing still need a Steam Machine trial.
+
+## 0.7.0-alpha.1 - LOCAL ONLY - 2026-09-24
+
+- Add PongBar, an opt-in 17-LED timing game for one or two controllers on Steam Home. Solo has three lives and a saved best streak; duel ends at five points. Every five successful returns changes the field colour and increases speed.
+- Add a live Decky preview and touch controls for inspecting the game without a detected controller. Controller play uses the browser Gamepad API from the plugin runtime, with stable per-session assignments and a connection lease. This input path still requires validation on the official Steam Machine, especially after closing the Decky panel.
+- Add short, optional browser gamepad vibration for hits and points where the controller and Steam UI expose it. Vibration is off by default and has not been confirmed on hardware.
+- PongBar yields to native LED ownership, higher-priority signals and Steam game launch, then restores the previous SignalBar display when the session ends. No public release.
+
 ## 0.6.1 - 2026-09-24
 
 - Add **Cross & gather** and **Slow convergence** to Cloud Weather. The first
@@ -441,7 +494,7 @@ a verified fix; beta.3 replaces this outdated callback path.
   Performance, Countdown, Notifications, Screenshots, Achievements, and
   Recording.
 
-## 0.4.0-beta.4 — 2026-09-21
+## 0.4.0-beta.4 - 2026-09-21
 
 - Restore live CPU/GPU load and temperature readings in the quick Decky panel
   whenever Performance is the selected base display.
@@ -454,7 +507,7 @@ a verified fix; beta.3 replaces this outdated callback path.
 - Add an optional recording-marker isolation setting that turns the two
   neighbouring LEDs black to reduce optical colour bleed.
 
-## 0.4.0-beta.3 — 2026-09-21
+## 0.4.0-beta.3 - 2026-09-21
 
 - Show the running game's artwork in the quick Decky panel, regardless of the
   selected LED display mode.
@@ -464,7 +517,7 @@ a verified fix; beta.3 replaces this outdated callback path.
 - Build and automated tests pass; the revised layout still needs a Steam
   Machine/Decky visual check.
 
-## 0.4.0-beta.2 — 2026-09-21
+## 0.4.0-beta.2 - 2026-09-21
 
 - Add all 14 notification, achievement and screenshot variants from the two
   animation mockups, while retaining the three beta.1 patterns as choices.
@@ -479,7 +532,7 @@ a verified fix; beta.3 replaces this outdated callback path.
 - Automated tests cover each 17-LED variant and settings persistence; hardware
   behaviour still needs verification on an official Steam Machine.
 
-## 0.4.0-beta.1 — 2026-09-21
+## 0.4.0-beta.1 - 2026-09-21
 
 - Signal every valid Steam notification type, including Community comments and
   types added later. Do not suppress later notifications because Steam reused a
@@ -504,7 +557,7 @@ a verified fix; beta.3 replaces this outdated callback path.
 - Beta limitation: SteamClient event callbacks still need verification on the
   official Steam Machine; this build is not a stable release.
 
-## 0.3.2-beta.1 — 2026-09-21
+## 0.3.2-beta.1 - 2026-09-21
 
 - Prefer artwork installed locally through Steam's custom grid (including
   SteamGridDB) over the unmodified Store image for the same game.
@@ -515,7 +568,7 @@ a verified fix; beta.3 replaces this outdated callback path.
 - Keep artwork discovery local and read-only; no SteamGridDB API key or network
   request is required.
 
-## 0.3.1 — 2026-09-20
+## 0.3.1 - 2026-09-20
 
 - Extend the existing **Extra dark LEDs** optical calibration to Performance
   as well as Playtime Countdown, retaining the default value of three.
@@ -533,7 +586,7 @@ a verified fix; beta.3 replaces this outdated callback path.
   two lower samples before falling and then decays more slowly to prevent
   one-sample spikes from making the bar oscillate.
 
-## 0.3.0 — 2026-09-20
+## 0.3.0 - 2026-09-20
 
 - Start game detection, Artwork sampling, Performance activation, Steam
   Families observation, download ownership and suspend/resume handling as soon
@@ -575,7 +628,7 @@ a verified fix; beta.3 replaces this outdated callback path.
 - Added deterministic provider, priority, direction, colour and persistence
   tests for the countdown feature.
 
-## 0.2.1 — 2026-09-20
+## 0.2.1 - 2026-09-20
 
 - Replaced Automatic with explicit Artwork, Performance and Disabled modes;
   existing Automatic settings migrate without losing their former priority.
@@ -584,7 +637,7 @@ a verified fix; beta.3 replaces this outdated callback path.
 - Added two mixed CPU/GPU fill layouts: both halves left-to-right, or mirrored
   from the outside edges toward the black centre separator.
 
-## 0.2.0 — 2026-09-20
+## 0.2.0 - 2026-09-20
 
 - Persisted Artwork row mode and manual position independently for every AppID;
   untouched games continue to use the global default.
@@ -598,7 +651,7 @@ a verified fix; beta.3 replaces this outdated callback path.
 - Replaced the inaccessible native Debug details element with a focusable
   SteamOS toggle in the top Status section.
 
-## 0.1.0 — 2026-09-20
+## 0.1.0 - 2026-09-20
 
 - Added Valve-first Vanilla Guard with external-change detection, cooldown and
   stable-window recovery.

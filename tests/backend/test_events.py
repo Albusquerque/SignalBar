@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import time
 import unittest
@@ -8,6 +9,7 @@ from unittest.mock import patch
 
 from signalbar.arbiter import Arbiter
 from signalbar.backend import Engine
+from signalbar.integration import LightEventLease
 from signalbar.models import GameState, ProviderOutput, normalize_frame
 from signalbar.providers.events import DURATIONS, VARIANT_DURATIONS, EventProvider, RED, event_frame
 from signalbar.settings import SettingsStore
@@ -50,6 +52,22 @@ class Clock:
 
     def advance(self, seconds):
         self.now += seconds
+
+
+class RecordingLease:
+    def __init__(self):
+        self.refreshes = []
+        self.releases = 0
+
+    def refresh(self, event=""):
+        self.refreshes.append(event)
+        return True
+
+    def acknowledged(self):
+        return True
+
+    def release(self):
+        self.releases += 1
 
 
 class EventTests(unittest.TestCase):
@@ -187,12 +205,17 @@ class EventTests(unittest.TestCase):
         self.assertEqual(arbiter.choose(mode="artwork", guard_allows=True,
                                         signal_critical=True, **kwargs).provider, "countdown")
         self.assertEqual(arbiter.choose(mode="disabled", guard_allows=True, **kwargs).provider, "none")
+        self.assertEqual(arbiter.choose(mode="events", guard_allows=False, **kwargs).provider,
+                         "event:achievement")
         self.assertEqual(arbiter.choose(mode="artwork", guard_allows=False, **kwargs).provider,
                          "event:achievement")
         self.assertEqual(arbiter.choose(mode="artwork", guard_allows=False,
                                         game=GameState(), **{k: v for k, v in kwargs.items() if k != "game"}).provider,
                          "event:achievement")
         without_event = {**kwargs, "event": ProviderOutput("event", None, "")}
+        events_only = arbiter.choose(mode="events", guard_allows=True, **without_event)
+        self.assertEqual(events_only.provider, "none")
+        self.assertIsNone(events_only.frame)
         self.assertEqual(arbiter.choose(mode="artwork", guard_allows=False, **without_event).provider,
                          "valve")
         self.assertEqual(arbiter.choose(mode="artwork", guard_allows=True, **without_event).provider,
@@ -271,6 +294,47 @@ class EventTests(unittest.TestCase):
                 self.assertEqual(hardware.frame, NATIVE)
             finally:
                 engine.stop()
+
+    def test_light_event_lease_wraps_the_physical_takeover(self):
+        with tempfile.TemporaryDirectory() as folder, patch.dict(DURATIONS, {"notification": .3}):
+            hardware = LoopHardware()
+            lease = RecordingLease()
+            settings = SettingsStore(str(Path(folder) / "settings.json"))
+            settings.update({"mode": "events", "events_enabled": True,
+                             "event_notification_variant": "notification-original",
+                             "controller_battery_display": "off", "weather_display": "off"})
+            engine = Engine(settings, str(Path(folder) / "artwork.json"),
+                            hardware_factory=lambda: hardware, event_lease=lease)
+            engine.start()
+            try:
+                self.assertTrue(engine.trigger_event("notification"))
+                self.assertTrue(self._wait_until(lambda: engine.status()["provider"] == "event:notification"))
+                self.assertTrue(lease.refreshes)
+                self.assertTrue(self._wait_until(lambda: engine.status()["provider"] == "none"))
+                self.assertGreater(lease.releases, 0)
+                self.assertEqual(hardware.frame, NATIVE)
+            finally:
+                engine.stop()
+
+    def test_light_event_lease_file_is_atomic_bounded_and_owner_scoped(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "signalbar-light-event.json"
+            clock = Clock()
+            lease = LightEventLease(path, clock=clock, ttl_s=.5)
+            self.assertTrue(lease.refresh("event:achievement"))
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["owner"], "SignalBar")
+            self.assertEqual(payload["purpose"], "light-event")
+            self.assertGreater(payload["expires_at"], clock())
+            ack = {
+                "protocol": 1, "owner": "StripMine", "token": payload["token"],
+                "expires_at": payload["expires_at"],
+            }
+            lease.ack_path.write_text(json.dumps(ack), encoding="utf-8")
+            self.assertTrue(lease.acknowledged())
+            lease.release()
+            self.assertFalse(path.exists())
+            self.assertFalse(lease.ack_path.exists())
 
     def test_new_native_write_interrupts_event_without_restoring_stale_frame(self):
         with tempfile.TemporaryDirectory() as folder:

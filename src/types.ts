@@ -1,4 +1,4 @@
-export type Mode = "artwork" | "performance" | "disabled";
+export type Mode = "artwork" | "performance" | "events" | "disabled";
 export type ArtworkMode = "auto" | "center" | "lower" | "manual";
 export type ArtworkSource = "hero" | "header" | "capsule";
 export type PerformanceMetric = "cpu" | "gpu" | "mixed";
@@ -10,8 +10,37 @@ export type RGB = [number, number, number];
 export type WeatherCondition = "clear_day" | "clear_night" | "rain" | "cloud" | "breaks" | "breaks_night" | "snow" | "storm";
 export interface WeatherLocation { name: string; country: string; latitude: number; longitude: number }
 
+export interface PongStatus {
+  active: boolean;
+  session_id: number;
+  phase: "idle" | "ready" | "rally" | "point" | "level" | "finished";
+  mode: "" | "solo" | "duel";
+  input_source: "touch" | "browser" | "steam";
+  action_button: number;
+  gamepad_indices: number[];
+  scores: number[];
+  lives: number;
+  streak: number;
+  returns: number;
+  best_streak: number;
+  level: number;
+  winner: number;
+  paused: boolean;
+  pause_reason: string;
+  feedback_seq: number;
+  feedback_player: number;
+  feedback_kind: string;
+  led_write_ms: number | null;
+  led_write_count: number;
+  led_write_pending: boolean;
+  vibration_enabled?: boolean;
+  colors: RGB[];
+}
+
 export interface Status {
   version: string;
+  pong: PongStatus;
+  pong_vibration_enabled: boolean;
   available: boolean;
   active: boolean;
   owner: "Valve" | "SignalBar";

@@ -6,7 +6,7 @@ Make your Steam Machine's 17-pixel light bar useful and a little more
 expressive. Choose a persistent display, then let playtime warnings and short
 Steam moments take the stage before your display returns.
 
-[Download SignalBar v0.6.1](https://github.com/Albusquerque/SignalBar/releases/tag/v0.6.1)
+[Download SignalBar v0.7.0](https://github.com/Albusquerque/SignalBar/releases/tag/v0.7.0)
 
 [Try the interactive SignalBar preview before installing](https://albusquerque.github.io/signalbar-concept/)
 
@@ -40,6 +40,27 @@ Performance as the active display. Missing or expired readings are not retained
 as if they were live.
 
 ![Animated mirrored CPU and GPU meter with changing load percentages, temperatures and colours](assets/readme-gifs/performance.gif)
+
+### Light Events only
+
+Use SignalBar for short Steam notifications, achievements, screenshots, and
+recording start/stop animations without keeping Artwork or Performance on the
+bar. Between events, Steam or another light-bar application retains control.
+This directly answers the request in
+[issue #1](https://github.com/Albusquerque/SignalBar/issues/1).
+
+With a compatible StripMine build, SignalBar announces each short takeover,
+StripMine yields automatically, and mining resumes on the LEDs after SignalBar
+restores the exact pre-event frame. No manual **Retry bar** action is required.
+
+### PongBar (experimental)
+
+Turn the 17-pixel strip into a timing game on Steam Home. Play solo for a best
+streak or assign two controllers for a first-to-five duel. PongBar includes a
+40 x 18 dot-matrix scoreboard, progressive speed and colour levels, touch
+fallback controls, and input timing diagnostics. Controller vibration remains
+experimental and disabled by default. See the
+[PongBar notes](docs/PONGBAR_ALPHA.md) for current limitations.
 
 ### Playtime Countdown
 
@@ -146,8 +167,8 @@ SignalBar follows a strict order:
 ### Decky Loader
 
 1. Install [Decky Loader](https://decky.xyz/).
-2. Download `SignalBar-v0.6.1.zip` from the
-   [v0.6.1 release](https://github.com/Albusquerque/SignalBar/releases/tag/v0.6.1).
+2. Download `SignalBar-v0.7.0.zip` from the
+   [v0.7.0 release](https://github.com/Albusquerque/SignalBar/releases/tag/v0.7.0).
    Do not extract it.
 3. Open **Decky > Settings > General** and enable **Developer mode** only if the
    **Developer** section is not already visible.
@@ -166,9 +187,9 @@ light bar through root-owned `valve-leds` sysfs files.
 ## First setup
 
 1. Open SignalBar in Decky's quick-access menu.
-2. Choose **Artwork**, **Performance**, or **Disabled**.
+2. Choose **Artwork**, **Performance**, **Light Events only**, or **Disabled**.
 3. Open **Detailed settings** for Artwork, Performance, Playtime, Light events,
-   Controllers, Weather, and Advanced options.
+   Controllers, PongBar, Weather, and Advanced options.
 4. Use Preview to compare animations before changing your live settings.
 
 Live Light events are enabled on a fresh installation. Controller alerts have
@@ -297,7 +318,7 @@ npm run build
 npm run package
 ```
 
-The installable archive is written to `out/SignalBar-v0.6.1.zip`.
+The installable archive is written to `out/SignalBar-v0.7.0.zip`.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for provider, arbitration, guard, and
 hardware-rendering details. Release history is available in

@@ -17,7 +17,7 @@ const selectedLabel = (options: readonly { data: string; label: string }[], valu
 
 const artworkSource = { hero: "Library Hero", header: "Library Header", capsule: "Library Capsule" };
 const artworkRow = { auto: "Auto", center: "Centre", lower: "Lower", manual: "Manual" };
-const displayMode = { artwork: "Artwork", performance: "Performance", disabled: "Disabled" };
+const displayMode = { artwork: "Artwork", performance: "Performance", events: "Light Events only", disabled: "Disabled" };
 const response = { responsive: "Responsive", balanced: "Balanced", smooth: "Smooth" };
 const palette = {
   thermal: "Cyan → amber → red", classic: "Green → yellow → red",
@@ -90,6 +90,13 @@ export function buildSettingsSnapshot(status: Status): SettingsSnapshotSection[]
         `Low ${onOff(status.controller_low_enabled)}: ${controller("low", status.controller_low_variant)} · Charge style ${controller("charging", status.controller_charging_variant)}`,
         `Two controllers ${controller("duo", status.controller_duo_variant)} · Brightness ${status.controller_gauge_brightness}%`,
         `Colours healthy ${rgbHex(status.controller_colour_normal)} · medium ${rgbHex(status.controller_colour_medium)} · low ${rgbHex(status.controller_colour_low)} · charge ${rgbHex(status.controller_colour_charging)}`,
+      ],
+    },
+    {
+      title: "PongBar",
+      lines: [
+        `Starts on demand on Steam Home · Best solo streak ${status.pong.best_streak}`,
+        `Experimental vibration ${onOff(status.pong_vibration_enabled)}`,
       ],
     },
     {

@@ -22,6 +22,8 @@ import {
   importConfiguration,
   getArtwork,
   getStatus,
+  startPong,
+  stopPong,
   previewCountdown,
   previewController,
   previewWeather,
@@ -38,9 +40,13 @@ import {
 } from "./api";
 import { sampleArtwork } from "./artwork";
 import { PalettePreview } from "./components/PalettePreview";
+import { PongMatrixDisplay } from "./components/PongMatrixDisplay";
 import { CONTROLLER_VARIANTS } from "./controller_variants";
 import { EVENT_VARIANTS } from "./event_variants";
 import { hslStringToRgb, performancePreview, rgbToHsl } from "./performance";
+import { connectedPongGamepads, observePongInputDiagnostics, pongInputDiagnostics, pressPongOnScreen, probePongBackend,
+  resetPongInputDiagnostics, steamPongInputState, type PongGamepad, type PongInputDiagnostic,
+  type SteamPongController } from "./pong_input";
 import { startSignalBarRuntime } from "./runtime";
 import { buildSettingsSnapshot } from "./settings_snapshot";
 import { WEATHER_CONDITIONS, WEATHER_VARIANTS } from "./weather_variants";
@@ -50,6 +56,7 @@ import type { ArtworkPayload, ArtworkSource, Status, WeatherCondition, WeatherLo
 const MODE_OPTIONS = [
   { data: "artwork", label: "Artwork" },
   { data: "performance", label: "Performance" },
+  { data: "events", label: "Light Events only" },
   { data: "disabled", label: "Disabled" },
 ];
 
@@ -362,7 +369,7 @@ function EventsPanel({ status, setStatus }: { status: Status; setStatus: (next: 
         <PanelSectionRow>
           <ToggleField
             label="Steam event animations"
-            description="Disabled by default. Short signals play even outside games, briefly replacing the current display. Previews work while off."
+            description="Enabled by default. Short signals play even outside games, briefly replacing the current display. Previews work while off."
             checked={status.events_enabled}
             onChange={async (value) => setStatus(await setSetting("events_enabled", value))}
           />
@@ -692,7 +699,233 @@ function WeatherPanel({ status, setStatus }: { status: Status; setStatus: (next:
   </>;
 }
 
-type Page = "quick" | "artwork" | "performance" | "countdown" | "events" | "controllers" | "weather" | "advanced";
+function PongPanel({ status, setStatus }: { status: Status; setStatus: (next: Status) => void }) {
+  const [mode, setMode] = useState<"solo" | "duel">("solo");
+  const [source, setSource] = useState<"steam" | "browser">("steam");
+  const [actionButton, setActionButton] = useState(29);
+  const [pads, setPads] = useState<PongGamepad[]>([]);
+  const [steam, setSteam] = useState<{ available: boolean; controllers: SteamPongController[] }>(steamPongInputState());
+  const [diagnostics, setDiagnostics] = useState<PongInputDiagnostic[]>(pongInputDiagnostics());
+  const [diagnosticNow, setDiagnosticNow] = useState(Date.now());
+  const [left, setLeft] = useState<number | null>(null);
+  const [right, setRight] = useState<number | null>(null);
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => observePongInputDiagnostics(), []);
+  useEffect(() => {
+    const refresh = () => {
+      setPads(connectedPongGamepads());
+      setSteam(steamPongInputState());
+      setDiagnostics(pongInputDiagnostics());
+      setDiagnosticNow(Date.now());
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 150);
+    return () => window.clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    if (!steam.available && pads.length > 0) setSource("browser");
+  }, [steam.available, pads.length]);
+  const activeDevices = source === "steam" ? steam.controllers : pads;
+  useEffect(() => {
+    if (activeDevices.length === 0) { setLeft(null); setRight(null); return; }
+    if (left == null || !activeDevices.some((pad) => pad.index === left)) setLeft(activeDevices[0].index);
+    if (right == null || !activeDevices.some((pad) => pad.index === right)) {
+      setRight(activeDevices.find((pad) => pad.index !== activeDevices[0].index)?.index ?? null);
+    }
+  }, [source, activeDevices.map((pad) => pad.index).join(",")]);
+
+  const pong = status.pong;
+  const steamName = (index: number) => status.debug.controller_telemetry.devices?.find((item) => item.index === index)?.name
+    ?? `Steam controller ${index + 1}`;
+  const options = activeDevices.map((pad) => ({ data: pad.index,
+    label: `${source === "steam" ? steamName(pad.index) : (pad as PongGamepad).name || "Controller"} · ${pad.index + 1}` }));
+  const selectionReady = left !== null && activeDevices.some((pad) => pad.index === left)
+    && (mode === "solo" || (right !== null && right !== left && activeDevices.some((pad) => pad.index === right)));
+  const startBlocked = busy || pong.active || status.mode === "disabled" || status.mode === "events" || status.game.appid > 0
+    || !selectionReady;
+  const blockedReason = pong.active ? "A PongBar session is already running." :
+    status.mode === "disabled" || status.mode === "events" ? "Select Artwork or Performance before starting PongBar." :
+    status.game.appid > 0 ? "Exit the running Steam game to play PongBar on Home." :
+    source === "steam" && !steam.available ? "Steam's controller input hook is unavailable in this UI." :
+    activeDevices.length < (mode === "duel" ? 2 : 1) ?
+      `Waiting for ${mode === "duel" ? "two controllers" : "one controller"} on the selected input path.` :
+      !selectionReady ? "Choose a distinct controller for each player." : "";
+  const begin = async (touchPreview: boolean) => {
+    setBusy(true);
+    setMessage("");
+    try {
+      let indices: number[] = [];
+      if (!touchPreview) {
+        if (left == null || !activeDevices.some((pad) => pad.index === left)) throw new Error("Select a connected controller.");
+        indices = [left];
+        if (mode === "duel") {
+          if (right == null || right === left || !activeDevices.some((pad) => pad.index === right)) {
+            throw new Error("Select a different controller for player 2.");
+          }
+          indices.push(right);
+        }
+      }
+      setStatus(await startPong(mode, indices, touchPreview ? "touch" : source, touchPreview ? 0 : actionButton));
+      setMessage(touchPreview ? "PongBar started with on-screen controls. This is the full game." :
+        `PongBar started. Press ${source === "steam" ? "the selected Steam button" : "the primary face button"} to return the ball.`);
+    } catch (error) { setMessage(String(error)); }
+    finally { setBusy(false); }
+  };
+  const hit = (player: number) => {
+    void pressPongOnScreen(pong.session_id, player).then((next) => setStatus({ ...status, pong: next })).catch(console.warn);
+  };
+
+  return <>
+    <PanelSection title="PongBar · alpha">
+      <PanelSectionRow><div style={{ fontSize: ".82em", lineHeight: 1.45 }}>
+        Return the white ball when it reaches your end of the 17-LED bar. Five returns unlock the next colour and speed.
+        Play from Steam Home. A running Steam game or an important SignalBar alert interrupts the session.
+      </div></PanelSectionRow>
+      <PanelSectionRow><DropdownItem label="Game" rgOptions={[
+        { data: "solo", label: "Solo · three lives" }, { data: "duel", label: "Duel · first to five" },
+      ]} selectedOption={mode} onChange={(option) => setMode(String(option.data) as "solo" | "duel")} /></PanelSectionRow>
+      <PanelSectionRow><DropdownItem label="Controller input" rgOptions={[
+        { data: "steam", label: "Steam controller events" },
+        { data: "browser", label: "Browser Gamepad API" },
+      ]} selectedOption={source} onChange={(option) => { setSource(String(option.data) as "steam" | "browser"); setLeft(null); setRight(null); }} /></PanelSectionRow>
+      <PanelSectionRow><div style={{ fontSize: ".8em" }}>
+        {source === "steam" ? (!steam.available ? "Steam controller input is not ready. The browser path and on-screen controls remain available." :
+          steam.controllers.length === 0 ? "Steam input is ready. Press any button once on each controller to join." :
+            steam.controllers.map((pad) => <div key={pad.index}>
+              {pad.index + 1}. {steamName(pad.index)} · last button {pad.lastButton} {pad.pressed ? "pressed" : "released"}
+            </div>)) :
+          typeof navigator.getGamepads !== "function" ? "This Steam UI does not expose the browser Gamepad API." :
+            pads.length === 0 ? "No browser gamepad exposed. Try Steam controller events above and press a button." :
+              pads.map((pad) => <div key={pad.index}>
+                {pad.index + 1}. {pad.name || "Controller"} · primary button {pad.primaryPressed ? "pressed" : "released"}
+              </div>)}
+      </div></PanelSectionRow>
+      {source === "steam" ? <PanelSectionRow><DropdownItem label="Return button" rgOptions={[
+        { data: 29, label: "Right trigger" }, { data: 0, label: "A / Cross" },
+        { data: 2, label: "X / Square" }, { data: 41, label: "Right stick click" },
+      ]} selectedOption={actionButton} onChange={(option) => setActionButton(Number(option.data))} /></PanelSectionRow> : null}
+      {activeDevices.length > 0 ? <PanelSectionRow><DropdownItem label="Player 1 · left" rgOptions={options}
+        selectedOption={left ?? activeDevices[0].index} onChange={(option) => setLeft(Number(option.data))} /></PanelSectionRow> : null}
+      {mode === "duel" && activeDevices.length > 1 ? <PanelSectionRow><DropdownItem label="Player 2 · right" rgOptions={options}
+        selectedOption={right ?? activeDevices[1].index} onChange={(option) => setRight(Number(option.data))} /></PanelSectionRow> : null}
+      <PanelSectionRow><ButtonItem label="Play with controller" disabled={startBlocked}
+        onClick={() => void begin(false)}>Start</ButtonItem></PanelSectionRow>
+      {startBlocked && blockedReason ? <PanelSectionRow><div style={{ fontSize: ".78em", opacity: .8 }}>{blockedReason}</div></PanelSectionRow> : null}
+      <PanelSectionRow><ButtonItem label="Play with on-screen controls" disabled={busy || pong.active || status.mode === "disabled" || status.mode === "events" || status.game.appid > 0}
+        onClick={() => void begin(true)}>Start full game without controller</ButtonItem></PanelSectionRow>
+      {pong.active ? <PanelSectionRow><ButtonItem label="End PongBar session" onClick={() => void stopPong().then(setStatus).catch(console.warn)}>
+        Stop</ButtonItem></PanelSectionRow> : null}
+      {(pong.active || pong.phase === "finished") ? <PanelSectionRow><ButtonItem label="Show PongBar on screen"
+        onClick={() => { Navigation.CloseSideMenus(); Navigation.Navigate("/signalbar/pongbar"); }}>
+        Open full-screen scoreboard</ButtonItem></PanelSectionRow> : null}
+      {message ? <PanelSectionRow><div style={{ fontSize: ".78em" }}>{message}</div></PanelSectionRow> : null}
+    </PanelSection>
+    <PanelSection title="Live input diagnostics">
+      <PanelSectionRow><div style={{ fontSize: ".8em", lineHeight: 1.45 }}>
+        Each detected press measures the time from the SteamUI button event to the backend reply in milliseconds.
+        In a game this is the hit request; outside a game it is a small probe. On-screen hits are measured too.
+      </div></PanelSectionRow>
+      <PanelSectionRow><div style={{ display: "flex", gap: 8 }}>
+        <ButtonItem label="Measure backend without a controller" onClick={probePongBackend}>Probe backend</ButtonItem>
+        <ButtonItem label="Clear input measurements" onClick={() => { resetPongInputDiagnostics(); setDiagnostics([]); }}>
+          Clear</ButtonItem>
+      </div></PanelSectionRow>
+      {diagnostics.length === 0 ? <PanelSectionRow><div style={{ fontSize: ".8em", opacity: .75 }}>
+        Waiting for a button press. Press a button on each controller, or use Probe backend.
+      </div></PanelSectionRow> : diagnostics.map((item) => <PanelSectionRow key={`${item.source}:${item.index}`}>
+        <div style={{ width: "100%", fontSize: ".82em", lineHeight: 1.5 }}>
+          <b>{item.source === "steam" ? steamName(item.index) : item.source === "browser" ?
+            `Browser controller ${item.index + 1}` : item.source === "touch" ?
+              `On-screen player ${item.index + 1}` : "Backend probe"}</b>
+          {item.lastButton >= 0 ? ` · button ${item.lastButton}` : ""}
+          {` · ${item.request === "game" ? "hit" : "probe"} · ${item.presses} press${item.presses === 1 ? "" : "es"}`}
+          <div>{item.lastMs == null ? "Waiting for backend reply" :
+            `Latest ${item.lastMs.toFixed(1)} ms · average ${item.averageMs?.toFixed(1)} ms · max ${item.maximumMs?.toFixed(1)} ms (last 20 replies)`}</div>
+          <div style={{ opacity: .72 }}>Last input {Math.max(0, diagnosticNow - item.lastAt)} ms ago
+            {item.failures ? ` · ${item.failures} error${item.failures === 1 ? "" : "s"}` : ""}
+            {item.lastError ? ` · ${item.lastError.slice(0, 120)}` : ""}</div>
+        </div>
+      </PanelSectionRow>)}
+      <PanelSectionRow><div style={{ fontSize: ".8em", lineHeight: 1.45 }}>
+        Accepted hit → LED write: {pong.led_write_ms == null ? "no measurement yet" :
+          `${pong.led_write_ms.toFixed(1)} ms`}
+        {pong.led_write_pending ? " · waiting for next PongBar LED write" : ""}
+        {` · ${pong.led_write_count} measured hit${pong.led_write_count === 1 ? "" : "s"}`}
+        <div style={{ opacity: .72 }}>This ends at the software write to the LED device. It cannot measure when the light becomes visible.</div>
+      </div></PanelSectionRow>
+    </PanelSection>
+    <PanelSection title="Live game">
+      <PanelSectionRow><PongMatrixDisplay status={pong} /></PanelSectionRow>
+      <PanelSectionRow><div style={{ width: "100%", fontSize: ".84em", lineHeight: 1.5 }}>
+        <div><b>{pong.mode === "solo" ? "Solo" : pong.mode === "duel" ? "Duel" : "Ready to play"}</b>
+          {pong.active ? ` · ${pong.paused ? "Paused" : pong.phase}` : pong.phase === "finished" ? " · Finished" : ""}</div>
+        <div>{pong.mode === "duel" ? `Player 1 ${pong.scores[0]} : ${pong.scores[1]} Player 2` :
+          `Lives ${pong.lives} · streak ${pong.streak} · best ${pong.best_streak}`}</div>
+        <div>Colour level {pong.level}/5 · returns {pong.returns}{pong.pause_reason && pong.paused ? ` · ${pong.pause_reason}` : ""}</div>
+        <PalettePreview colors={pong.colors} />
+        {pong.mode === "" ? null : <div style={{ opacity: .72 }}>White = ball · cyan = left · pink = right</div>}
+      </div></PanelSectionRow>
+      {pong.active && pong.gamepad_indices.length === 0 ? <PanelSectionRow><div style={{ display: "flex", gap: 8 }}>
+        <ButtonItem label="Return left" onClick={() => hit(0)}>Hit left</ButtonItem>
+        {pong.mode === "duel" ? <ButtonItem label="Return right" onClick={() => hit(1)}>Hit right</ButtonItem> : null}
+      </div></PanelSectionRow> : null}
+    </PanelSection>
+    <PanelSection title="Feedback">
+      <PanelSectionRow><ToggleField label="Experimental vibration" checked={status.pong_vibration_enabled}
+        description="Short pulses via the Browser Gamepad API only. Steam controller events do not provide vibration yet."
+        onChange={async (value) => setStatus(await setSetting("pong_vibration_enabled", value))} /></PanelSectionRow>
+    </PanelSection>
+  </>;
+}
+
+function PongScreen() {
+  const [status, setStatus] = useState<Status | null>(null);
+  const [message, setMessage] = useState("");
+  useEffect(() => {
+    let alive = true;
+    const refresh = () => {
+      void getStatus().then((next) => { if (alive) setStatus(next); })
+        .catch((error) => { if (alive) setMessage(String(error)); });
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 180);
+    return () => { alive = false; window.clearInterval(timer); };
+  }, []);
+
+  const pong = status?.pong;
+  const hit = (player: number) => {
+    if (!pong) return;
+    void pressPongOnScreen(pong.session_id, player)
+      .then((next) => setStatus((current) => current ? { ...current, pong: next } : current))
+      .catch((error) => setMessage(String(error)));
+  };
+  return <div style={{ width: "min(94vw, 920px)", margin: "3vh auto", padding: "0 12px",
+    boxSizing: "border-box", color: "#eee8dd" }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 18 }}>
+      <div><div style={{ fontSize: "1.6em", fontWeight: 700 }}>PongBar</div>
+        <div style={{ opacity: .75 }}>Live pinball score display</div></div>
+      <ButtonItem label="Back to SignalBar" onClick={() => Navigation.NavigateBack()}>Back</ButtonItem>
+    </div>
+    {pong ? <PongMatrixDisplay status={pong} /> : <div>Loading PongBar…</div>}
+    {pong ? <div style={{ display: "flex", gap: 24, flexWrap: "wrap", marginTop: 16, fontSize: "1.06em" }}>
+      <span>{pong.mode === "duel" ? `Player 1 ${pong.scores[0]} · Player 2 ${pong.scores[1]}` :
+        `Returns ${pong.returns} · best ${pong.best_streak} · lives ${pong.lives}`}</span>
+      <span>Level {pong.level}/5</span>
+      <span>{pong.paused ? `Paused · ${pong.pause_reason}` : pong.phase}</span>
+    </div> : null}
+    {pong?.active && pong.input_source === "touch" ? <div style={{ display: "flex", gap: 12, marginTop: 18 }}>
+      <ButtonItem label="Return left" onClick={() => hit(0)}>Hit left</ButtonItem>
+      {pong.mode === "duel" ? <ButtonItem label="Return right" onClick={() => hit(1)}>Hit right</ButtonItem> : null}
+    </div> : null}
+    {pong?.active ? <div style={{ marginTop: 12 }}><ButtonItem label="Stop PongBar session"
+      onClick={() => void stopPong().then(setStatus).catch((error) => setMessage(String(error)))}>Stop game</ButtonItem></div> : null}
+    {message ? <div style={{ color: "#ff9999", marginTop: 12 }}>{message}</div> : null}
+  </div>;
+}
+
+type Page = "quick" | "artwork" | "performance" | "countdown" | "events" | "controllers" | "weather" | "pong" | "advanced";
 
 function Content({ page = "quick" }: { page?: Page }) {
   const [status, setStatusState] = useState<Status | null>(null);
@@ -708,19 +941,22 @@ function Content({ page = "quick" }: { page?: Page }) {
   const setStatus = (next: Status) => {
     setStatusState(next);
   };
+  const quickPongVisible = page === "quick" && Boolean(status?.pong.active || status?.pong.phase === "finished");
 
   useEffect(() => {
     let alive = true;
     void getStatus().then((next) => alive && setStatus(next)).catch(console.warn);
     const timer = window.setInterval(() => {
       void getStatus().then((next) => alive && setStatus(next)).catch(() => undefined);
-    }, page === "events" || page === "controllers" || page === "weather" ? 180 : 1000);
+    }, page === "events" || page === "controllers" || page === "weather" || page === "pong" || quickPongVisible ? 180 : 1000);
     return () => {
       alive = false;
       window.clearInterval(timer);
-      if (manualTimer.current != null) window.clearTimeout(manualTimer.current);
     };
-  }, [page]);
+  }, [page, quickPongVisible]);
+  useEffect(() => () => {
+    if (manualTimer.current != null) window.clearTimeout(manualTimer.current);
+  }, []);
 
   const loadAndSampleArtwork = useCallback(async (appid: number, source: ArtworkSource) => {
     const request = ++artworkRequest.current;
@@ -870,6 +1106,7 @@ function Content({ page = "quick" }: { page?: Page }) {
     && hero?.appid === status.game.appid && hero.found && hero.data_uri ? hero : null;
   const performanceColors = performancePreview(status);
   const baseShownColors = status.provider.startsWith("event:") ? status.events.colors
+    : status.provider === "pongbar" ? status.pong.colors
     : status.provider.startsWith("controller:") || status.provider.startsWith("controller-") ? status.controllers.colors
     : status.provider === "countdown" ? status.countdown.colors
       : status.provider.startsWith("weather") ? status.weather.colors
@@ -878,6 +1115,7 @@ function Content({ page = "quick" }: { page?: Page }) {
   const shownColors = status.provider.endsWith("+recording")
     ? addRecordingMarker(status, baseShownColors) : baseShownColors;
   const shownLabel = status.provider.startsWith("event:") ? status.events.variant
+    : status.provider === "pongbar" ? "PongBar"
     : status.provider.startsWith("controller:") ? `Controller · ${status.controllers.variant}`
       : status.provider === "controller-battery" ? "Controller battery"
       : status.provider === "controller-charging" ? "Controller charging"
@@ -902,11 +1140,18 @@ function Content({ page = "quick" }: { page?: Page }) {
         </PanelSectionRow>
       </PanelSection> : null}
 
+      {quickPongVisible ? <PanelSection title="PongBar score">
+        <PanelSectionRow><PongMatrixDisplay status={status.pong} /></PanelSectionRow>
+        <PanelSectionRow><ButtonItem label="Show PongBar on screen"
+          onClick={() => { Navigation.CloseSideMenus(); Navigation.Navigate("/signalbar/pongbar"); }}>
+          Open full-screen scoreboard</ButtonItem></PanelSectionRow>
+      </PanelSection> : null}
+
       {page === "quick" ? <PanelSection title="Mode">
         <PanelSectionRow>
           <DropdownItem
             label="Default display"
-            description="Used on Home and by games without an override. Disabled turns off all SignalBar lighting, including game profiles."
+            description="Used on Home and by games without an override. Light Events only leaves the bar to Steam or another app between notification, achievement, screenshot and recording animations. Disabled turns off every SignalBar light."
             rgOptions={MODE_OPTIONS}
             selectedOption={status.default_mode}
             onChange={async (option) => setStatus(await setMode(String(option.data)))}
@@ -920,6 +1165,7 @@ function Content({ page = "quick" }: { page?: Page }) {
             onChange={async (option) => setStatus(await setGameDisplay(status.game.appid, String(option.data)))} /></PanelSectionRow>
           <PanelSectionRow><div style={{ fontSize: ".78em", opacity: .75 }}>
             {status.default_mode === "disabled" ? "SignalBar is disabled. The saved game choice will apply when re-enabled."
+              : status.default_mode === "events" ? "Light Events only is global: saved game displays remain dormant while short Steam events can still use the bar."
               : `Active display: ${status.mode === "performance" ? "Performance" : "Artwork"}${status.display_override === "inherit" ? " (default)" : " (game profile)"}. Countdowns and short alerts keep their usual priority.`}
           </div></PanelSectionRow>
         </> : <PanelSectionRow><div style={{ fontSize: ".78em", opacity: .75 }}>Launch a game to save its own Artwork or Performance choice.</div></PanelSectionRow>}
@@ -1146,6 +1392,7 @@ function Content({ page = "quick" }: { page?: Page }) {
       {page === "events" ? <EventsPanel status={status} setStatus={setStatus} /> : null}
 
       {page === "controllers" ? <ControllersPanel status={status} setStatus={setStatus} /> : null}
+      {page === "pong" ? <PongPanel status={status} setStatus={setStatus} /> : null}
 
       {page === "weather" ? <WeatherPanel status={status} setStatus={setStatus} /> : null}
 
@@ -1292,6 +1539,7 @@ function SignalBarSettings() {
     { title: "Playtime", route: "/signalbar/settings/countdown", content: <Content page="countdown" /> },
     { title: "Light events", route: "/signalbar/settings/events", content: <Content page="events" /> },
     { title: "Controllers", route: "/signalbar/settings/controllers", content: <Content page="controllers" /> },
+    { title: "PongBar alpha", route: "/signalbar/settings/pong", content: <Content page="pong" /> },
     { title: "Weather", route: "/signalbar/settings/weather", content: <Content page="weather" /> },
     "separator",
     { title: "Advanced / debug", route: "/signalbar/settings/advanced", content: <Content page="advanced" /> },
@@ -1304,6 +1552,7 @@ export default definePlugin(() => {
   const runtime = startSignalBarRuntime();
   const weatherTopBar = startWeatherTopBar();
   routerHook.addRoute("/signalbar/settings", SignalBarSettings);
+  routerHook.addRoute("/signalbar/pongbar", PongScreen);
   return {
     name: "SignalBar",
     titleView: <div className={staticClasses.Title}>SignalBar</div>,
@@ -1314,6 +1563,7 @@ export default definePlugin(() => {
       runtime.stop();
       weatherTopBar.stop();
       routerHook.removeRoute("/signalbar/settings");
+      routerHook.removeRoute("/signalbar/pongbar");
     },
   };
 });

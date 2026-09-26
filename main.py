@@ -119,6 +119,26 @@ class Plugin:
         self.engine.stop_free_timer()
         return self.engine.status()
 
+    async def start_pong(self, mode: str, gamepad_indices, input_source=None,
+                         action_button: int = 0):
+        return self.engine.start_pong(mode, gamepad_indices, input_source, action_button)
+
+    async def stop_pong(self):
+        return self.engine.stop_pong()
+
+    async def press_pong(self, session_id: int, player: int):
+        return self.engine.press_pong(session_id, player)
+
+    async def get_pong_status(self):
+        return self.engine.pong_status()
+
+    async def ping_pong_input(self):
+        """Small RPC for measuring controller-event to backend-response time."""
+        return True
+
+    async def set_pong_input_state(self, session_id: int, connected: bool):
+        return self.engine.set_pong_input_state(session_id, connected)
+
     async def preview_countdown(self):
         self.engine.preview_countdown()
         return self.engine.status()

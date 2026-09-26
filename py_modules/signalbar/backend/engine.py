@@ -12,24 +12,37 @@ import time
 from signalbar import __version__
 from signalbar.arbiter import Arbiter, VanillaGuard
 from signalbar.hardware import ValveLedHardware
+from signalbar.integration import LightEventLease
 from signalbar.models import GameState
 from signalbar.providers import ArtworkProvider, CountdownProvider, EventProvider, IdleProvider, PerformanceProvider
 from signalbar.providers.controller import ControllerProvider
+from signalbar.providers.pong import PongGame
 from signalbar.providers.weather import WeatherProvider
 from signalbar.renderer import Renderer
 
 
 class Engine:
-    def __init__(self, settings, cache_path, logger=None, hardware_factory=ValveLedHardware):
+    def __init__(self, settings, cache_path, logger=None, hardware_factory=ValveLedHardware,
+                 event_lease=None):
         self.settings = settings
         self.log = logger
         self.hardware_factory = hardware_factory
+        self.event_lease = event_lease or LightEventLease()
+        self._light_event_announced_at = 0.0
         self.artwork = ArtworkProvider(cache_path)
         self.countdown = CountdownProvider()
         self.performance = PerformanceProvider()
         self.events = EventProvider()
         self.events.set_variants(settings.all())
         self.controllers = ControllerProvider()
+        self.pong = PongGame()
+        self.pong.best_streak = settings.all()["pong_best_streak"]
+        self._pong_input_until = 0.0
+        self._pong_input_connected = False
+        self._pong_disconnected_at = 0.0
+        self._pong_hit_pending = None
+        self._pong_led_write_ms = None
+        self._pong_led_write_count = 0
         self.weather = WeatherProvider()
         initial = settings.all()
         self.weather.configure(initial["weather_location"], initial["weather_display"], initial["weather_topbar_enabled"])
@@ -89,8 +102,14 @@ class Engine:
             self.events.clear_transients()
             self.events.clear_recording()
             self.controllers.clear()
+            self.pong.stop("SignalBar stopped")
+            self._pong_input_until = 0.0
+            self._pong_disconnected_at = 0.0
+            self._pong_hit_pending = None
             if self._renderer:
                 self._renderer.relinquish(restore_if_owned=True)
+            self.event_lease.release()
+            self._light_event_announced_at = 0.0
             self._owner = "Valve"
             self._decision = "none"
 
@@ -102,6 +121,9 @@ class Engine:
         with self._lock:
             changed = appid != self._game.appid
             self._game = GameState(appid, str(title or ""))
+            if self._game.running and self.pong.active:
+                self.pong.stop("A Steam game started")
+                self._pong_input_until = 0.0
             if changed:
                 # A Steam Families deadline belongs to the game session that
                 # produced it. Never leak it into the next game or after exit.
@@ -208,6 +230,63 @@ class Engine:
 
     def stop_free_timer(self):
         self.countdown.stop("free")
+
+    def start_pong(self, mode, gamepad_indices, input_source=None, action_button=0):
+        with self._lock:
+            if self._game.running:
+                raise ValueError("PongBar can start only on Steam Home")
+            if self.settings.all()["mode"] not in {"artwork", "performance"}:
+                raise ValueError("Select Artwork or Performance before starting PongBar")
+            self.pong.start(mode, gamepad_indices, self.settings.all()["pong_best_streak"],
+                            input_source=input_source, action_button=action_button)
+            self._pong_input_connected = not bool(gamepad_indices)
+            self._pong_input_until = time.monotonic() + 2.0
+            self._pong_disconnected_at = 0.0
+            self._pong_hit_pending = None
+            self._pong_led_write_ms = None
+            self._pong_led_write_count = 0
+        return self.status()
+
+    def stop_pong(self):
+        with self._lock:
+            self.pong.stop("Stopped by player")
+            self._pong_input_until = 0.0
+            self._pong_disconnected_at = 0.0
+            self._pong_hit_pending = None
+        return self.status()
+
+    def press_pong(self, session_id, player):
+        with self._lock:
+            accepted = self.pong.press(player, session_id)
+            if accepted:
+                self._pong_hit_pending = (session_id, self.pong.feedback_seq, time.monotonic())
+            if accepted and self.pong.mode == "solo" and self.pong.best_streak > self.settings.all()["pong_best_streak"]:
+                self.settings.update({"pong_best_streak": self.pong.best_streak})
+            return self._pong_status_locked()
+
+    def _pong_status_locked(self):
+        pending = self._pong_hit_pending
+        if (pending is not None and (not self.pong.active or pending[0] != self.pong.session_id
+                                     or time.monotonic() - pending[2] > 2.0)):
+            self._pong_hit_pending = None
+        return {**self.pong.status(),
+                "led_write_ms": self._pong_led_write_ms,
+                "led_write_count": self._pong_led_write_count,
+                "led_write_pending": self._pong_hit_pending is not None}
+
+    def pong_status(self):
+        with self._lock:
+            return {**self._pong_status_locked(),
+                    "vibration_enabled": self.settings.all()["pong_vibration_enabled"]}
+
+    def set_pong_input_state(self, session_id, connected):
+        with self._lock:
+            if self.pong.active and session_id == self.pong.session_id:
+                self._pong_input_connected = bool(connected)
+                self._pong_input_until = time.monotonic() + 2.0
+                if connected:
+                    self._pong_disconnected_at = 0.0
+            return self.pong_status()
 
     def preview_countdown(self):
         self.countdown.start("preview", 15.0, total_seconds=15.0, label="Preview")
@@ -332,6 +411,8 @@ class Engine:
         return values
 
     def import_configuration(self, global_values, display_profiles, artwork_profiles):
+        with self._lock:
+            self.pong.stop("Configuration changed")
         previous = self.settings.all()
         values = self.settings.replace_configuration(global_values, display_profiles, artwork_profiles)
         changes = {key: value for key, value in values.items() if previous.get(key) != value}
@@ -372,8 +453,10 @@ class Engine:
             ):
                 if key in changes and not values[key]:
                     self.events.cancel_kinds(kinds)
-        if values["mode"] == "disabled":
+        if values["mode"] in {"disabled", "events"}:
             self.controllers.clear_transients()
+            with self._lock:
+                self.pong.stop("SignalBar has no persistent display")
         if "parental_countdown_enabled" in changes and not values["parental_countdown_enabled"]:
             # Turning the feature off is an immediate cancellation, not only
             # a visual filter. Later callbacks are ignored until re-enabled.
@@ -496,16 +579,37 @@ class Engine:
                 controller_event = self.controllers.event_output()
                 controller_base = self.controllers.persistent_output(values, game.running)
                 weather_base = self.weather.output(values, game.running, now)
+                pong_visible = (
+                    allowed and values["mode"] in {"artwork", "performance"} and not game.running
+                    and signal.frame is None and event.frame is None
+                    and controller_event.frame is None
+                    and weather_base.provider != "weather:preview"
+                )
+                with self._lock:
+                    connected = not self.pong.gamepad_indices or (
+                        self._pong_input_connected and now < self._pong_input_until
+                    )
+                    if self.pong.active and not connected:
+                        if not self._pong_disconnected_at:
+                            self._pong_disconnected_at = now
+                        elif now - self._pong_disconnected_at >= 30.0:
+                            self.pong.stop("Controller disconnected for 30 seconds")
+                    elif connected:
+                        self._pong_disconnected_at = 0.0
+                    self.pong.advance(pong_visible and connected,
+                                      "Controller unavailable" if not connected else "Another signal has the bar")
+                    pong_output = self.pong.output()
+                    pong_feedback_seq = self.pong.feedback_seq
                 # Moving event waves need more than ten samples per second to
                 # visibly visit all 17 positions. Normal providers stay at
                 # the conservative 10 Hz cadence.
-                interval = 0.06 if event.frame is not None or controller_event.frame is not None else 0.10
+                interval = 0.06 if event.frame is not None or controller_event.frame is not None or pong_output.frame is not None else 0.10
                 decision = self.arbiter.choose(
                     mode=values["mode"], guard_allows=allowed, game=game,
                     performance=performance, artwork=artwork, idle=self.idle.output(),
                     signal=signal, event=event, signal_critical=signal_critical,
                     controller_event=controller_event, controller_base=controller_base,
-                    weather_base=weather_base,
+                    weather_base=weather_base, pong=pong_output,
                     recording_marker=(
                         self.events.recording and values["events_enabled"]
                         and values["event_recording_enabled"]
@@ -514,7 +618,29 @@ class Engine:
                     performance_always=values["performance_always"],
                 )
 
-                if decision.frame is not None:
+                is_light_event = decision.provider.startswith("event:")
+                if is_light_event:
+                    # Publish before the first LED write so StripMine can yield
+                    # without treating this short, intentional takeover as a conflict.
+                    self.event_lease.refresh(decision.provider)
+                    if not self._light_event_announced_at:
+                        self._light_event_announced_at = now
+                    handoff_ready = (
+                        self.event_lease.acknowledged()
+                        or now - self._light_event_announced_at >= 0.10
+                    )
+                else:
+                    self._light_event_announced_at = 0.0
+                    handoff_ready = True
+                if is_light_event and not handoff_ready:
+                    # Keep the current frame untouched until StripMine confirms
+                    # it has stopped writing. A short timeout preserves normal
+                    # events when no compatible companion is installed.
+                    event_was_active = False
+                    event_preempted_valve = False
+                    owner = self._owner
+                    suspension = "waiting for companion LED handoff"
+                elif decision.frame is not None:
                     is_event = decision.provider.startswith(("event:", "controller:"))
                     if is_event and not allowed:
                         event_preempted_valve = True
@@ -523,6 +649,16 @@ class Engine:
                     wrote = renderer.render(decision.frame)
                     if wrote:
                         guard.note_own_write(renderer.last_signature)
+                        if decision.provider == "pongbar":
+                            with self._lock:
+                                pending = self._pong_hit_pending
+                                if (pending is not None and pending[0] == self.pong.session_id
+                                        and pending[1] <= pong_feedback_seq):
+                                    elapsed = time.monotonic() - pending[2]
+                                    if elapsed <= 2.0:
+                                        self._pong_led_write_ms = elapsed * 1000.0
+                                        self._pong_led_write_count += 1
+                                    self._pong_hit_pending = None
                     owner = "SignalBar"
                     suspension = ""
                     event_was_active = is_event
@@ -539,14 +675,28 @@ class Engine:
                     event_preempted_valve = False
                     owner = "Valve"
                     suspension = guard.reason if externally_blocked else decision.reason
+                if not is_light_event:
+                    # Relinquish/restore happens above; only then tell StripMine
+                    # that it may safely reclaim its continuously animated bar.
+                    self.event_lease.release()
 
                 with self._lock:
-                    self._decision = decision.provider
+                    # Do not report the event as physically active while the
+                    # cooperative handoff is still pending. Besides being more
+                    # truthful in diagnostics, this prevents callers from
+                    # racing a native write against SignalBar's first frame.
+                    self._decision = (
+                        "event:handoff"
+                        if is_light_event and not handoff_ready
+                        else decision.provider
+                    )
                     self._owner = owner
                     self._suspension_reason = suspension
                     self._error = ""
             except Exception as error:
                 renderer.relinquish(restore_if_owned=False)
+                self.event_lease.release()
+                self._light_event_announced_at = 0.0
                 with self._lock:
                     self._owner = "Valve"
                     self._decision = "none"
@@ -694,6 +844,8 @@ class Engine:
                 "weather": weather_status,
                 "controllers": controller_status,
                 "events": self.events.status(),
+                "pong": self._pong_status_locked(),
+                "pong_vibration_enabled": values["pong_vibration_enabled"],
                 "game": {"appid": self._game.appid, "title": self._game.title},
                 "performance": {
                     "sample_age_s": max(0.0, now - sample.sampled_at) if sample.sampled_at else None,
