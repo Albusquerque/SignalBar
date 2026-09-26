@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.1 - 2026-09-27
+
+- Rename the user-facing **Light Events only** display to **Signals only** and keep controller battery gauges, continuous charging, brief controller alerts, and playtime countdowns active there. Artwork, Performance, and Weather stay dormant; when no useful signal is active, the bar is released.
+- Detect new replies in subscribed Steam Community discussions and followed group posts from Steam's server notification centre without replaying the existing inbox or duplicating native comment toasts.
+- Restore the dedicated **Compatibility** page and the complete StripMine ownership protocol that were omitted from the first v0.7.1 package. Choose SignalBar or StripMine priority independently for Artwork, Performance, Weather, Controller displays and Light Events.
+- Extend acknowledged handoffs to permanent SignalBar providers. Playtime countdowns remain fixed SignalBar priorities, while an empty Signals only display yields to StripMine.
+
 ## 0.7.0 - 2026-09-26
 
 Official release. Changes since 0.6.1:
