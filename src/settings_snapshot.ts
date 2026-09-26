@@ -93,13 +93,6 @@ export function buildSettingsSnapshot(status: Status): SettingsSnapshotSection[]
       ],
     },
     {
-      title: "PongBar",
-      lines: [
-        `Starts on demand on Steam Home · Best solo streak ${status.pong.best_streak}`,
-        `Experimental vibration ${onOff(status.pong_vibration_enabled)}`,
-      ],
-    },
-    {
       title: "Weather",
       lines: [
         `City ${status.weather_location ? `${status.weather_location.name}, ${status.weather_location.country}` : "none"} · Display ${status.weather_display}`,

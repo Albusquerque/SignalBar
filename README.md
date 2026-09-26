@@ -53,15 +53,6 @@ With a compatible StripMine build, SignalBar announces each short takeover,
 StripMine yields automatically, and mining resumes on the LEDs after SignalBar
 restores the exact pre-event frame. No manual **Retry bar** action is required.
 
-### PongBar (experimental)
-
-Turn the 17-pixel strip into a timing game on Steam Home. Play solo for a best
-streak or assign two controllers for a first-to-five duel. PongBar includes a
-40 x 18 dot-matrix scoreboard, progressive speed and colour levels, touch
-fallback controls, and input timing diagnostics. Controller vibration remains
-experimental and disabled by default. See the
-[PongBar notes](docs/PONGBAR_ALPHA.md) for current limitations.
-
 ### Playtime Countdown
 
 See the time you have left. An active Steam Families limit automatically takes
@@ -93,8 +84,9 @@ Choose a city to give the light bar a living weather scene on Home, in games,
 or everywhere. Eighteen selectable loops cover clear skies, rain, cloud,
 partly cloudy day and night, snow, and storms. **Snow takes hold** is the
 default snow scene; all animations can be previewed without network access.
-Cloud has four choices, including the new **Cross & gather** (the fresh-install
-default) and the longer **Slow convergence**. Existing Cloud selections are kept.
+Cloud has four choices, including **Cross & gather** and the longer **Slow
+convergence**, which is the fresh-install default. Existing Cloud selections
+are kept.
 
 ![Weather animations on the Steam Machine light bar](assets/readme-gifs/weather.gif)
 
@@ -189,7 +181,7 @@ light bar through root-owned `valve-leds` sysfs files.
 1. Open SignalBar in Decky's quick-access menu.
 2. Choose **Artwork**, **Performance**, **Light Events only**, or **Disabled**.
 3. Open **Detailed settings** for Artwork, Performance, Playtime, Light events,
-   Controllers, PongBar, Weather, and Advanced options.
+   Controllers, Weather, and Advanced options.
 4. Use Preview to compare animations before changing your live settings.
 
 Live Light events are enabled on a fresh installation. Controller alerts have

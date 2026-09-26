@@ -51,7 +51,7 @@ class WeatherTests(unittest.TestCase):
     def test_new_cloud_patterns_and_existing_selections(self):
         self.assertEqual(VARIANT_NAMES["cloud"], (
             "Passing shadow", "Passing shadows", "Cross & gather", "Slow convergence"))
-        self.assertEqual(DEFAULTS["weather_cloud_variant"], 2)
+        self.assertEqual(DEFAULTS["weather_cloud_variant"], 3)
         self.assertEqual(weather_loop_seconds("cloud", 0), 8)
         self.assertEqual(weather_loop_seconds("cloud", 1), 8)
         self.assertEqual(weather_loop_seconds("cloud", 2), 20)
@@ -72,7 +72,7 @@ class WeatherTests(unittest.TestCase):
                 self.assertTrue(all(0 <= pixel[0] <= 242 for pixel in frame))
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "settings.json"
-            self.assertEqual(SettingsStore(str(path)).all()["weather_cloud_variant"], 2)
+            self.assertEqual(SettingsStore(str(path)).all()["weather_cloud_variant"], 3)
             for existing in (0, 1):
                 path.write_text(json.dumps({"weather_sequence_revision": 10,
                                             "weather_cloud_variant": existing}), encoding="utf-8")

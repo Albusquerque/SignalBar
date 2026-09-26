@@ -1,14 +1,8 @@
 import { callable } from "@decky/api";
-import type { ArtworkPayload, Status, WeatherLocation, WeatherCondition, PongStatus } from "./types";
+import type { ArtworkPayload, Status, WeatherLocation, WeatherCondition } from "./types";
 import type { ControllerTelemetry } from "./controller_monitor";
 
 export const getStatus = callable<[], Status>("get_status");
-export const startPong = callable<[mode: "solo" | "duel", gamepadIndices: number[], inputSource: "touch" | "browser" | "steam", actionButton: number], Status>("start_pong");
-export const stopPong = callable<[], Status>("stop_pong");
-export const pressPong = callable<[sessionId: number, player: number], PongStatus>("press_pong");
-export const getPongStatus = callable<[], PongStatus>("get_pong_status");
-export const pingPongInput = callable<[], boolean>("ping_pong_input");
-export const setPongInputState = callable<[sessionId: number, connected: boolean], PongStatus>("set_pong_input_state");
 export const exportConfiguration = callable<[], ConfigurationExportResult>("export_configuration");
 export const importConfiguration = callable<[path: string], Status>("import_configuration");
 export const resetConfiguration = callable<[], Status>("reset_configuration");

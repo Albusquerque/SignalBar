@@ -26,19 +26,6 @@ the restored LED signature before reclaiming the bar. Local lifecycle tests
 pass, but the transition still needs confirmation on the physical Steam
 Machine.
 
-## PongBar
-
-This release also includes the experimental PongBar timing game for Steam Home:
-
-- Solo and two-player modes on the 17-pixel strip.
-- SteamUI controller input with touch fallback.
-- Progressive speed, colour levels, saved best streak, and a 40 x 18 dot-matrix
-  scoreboard.
-- Full-screen scoreboard, event animations, and input timing diagnostics.
-
-Controller vibration remains experimental, disabled by default, and dependent
-on the controller path exposed by Steam.
-
 ## Install
 
 Download `SignalBar-v0.7.0.zip` below. In Decky Loader, open **Settings >

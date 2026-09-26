@@ -34,8 +34,6 @@ DEFAULTS = {
     "countdown_full_bar_minutes": 0,
     "countdown_dark_edge_compensation": 2,
     "free_timer_minutes": 60,
-    "pong_best_streak": 0,
-    "pong_vibration_enabled": False,
     "events_enabled": True,
     "event_notifications_enabled": True,
     "event_achievements_enabled": True,
@@ -77,7 +75,7 @@ DEFAULTS = {
     "weather_clear_day_variant": 0,
     "weather_clear_night_variant": 0,
     "weather_rain_variant": 0,
-    "weather_cloud_variant": 2,
+    "weather_cloud_variant": 3,
     "weather_breaks_variant": 0,
     "weather_breaks_night_variant": 0,
     "weather_snow_variant": 1,
@@ -230,7 +228,6 @@ class SettingsStore:
             "event_screenshots_enabled", "event_recording_enabled", "recording_marker_isolation",
             "controller_alerts_enabled", "controller_connect_enabled", "controller_low_enabled",
             "controller_charging_enabled",
-            "pong_vibration_enabled",
         ):
             self._data[key] = bool(self._data[key])
         for key, choices in EVENT_VARIANTS.items():
@@ -307,10 +304,6 @@ class SettingsStore:
             self._data["free_timer_minutes"] = max(5, min(240, int(round(float(self._data["free_timer_minutes"])))))
         except (TypeError, ValueError):
             self._data["free_timer_minutes"] = DEFAULTS["free_timer_minutes"]
-        try:
-            self._data["pong_best_streak"] = max(0, min(1000000, int(self._data["pong_best_streak"])))
-        except (TypeError, ValueError, OverflowError):
-            self._data["pong_best_streak"] = 0
         self._data["artwork_manual_y"] = max(0.15, min(0.90, float(self._data["artwork_manual_y"])))
         self._data["cool_temp_c"] = max(20.0, min(100.0, float(self._data["cool_temp_c"])))
         self._data["hot_temp_c"] = max(self._data["cool_temp_c"] + 1.0, min(120.0, float(self._data["hot_temp_c"])))

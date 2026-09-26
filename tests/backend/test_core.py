@@ -355,7 +355,7 @@ class CoreTests(unittest.TestCase):
 
 
 class PersistenceTests(unittest.TestCase):
-    def test_v061_fresh_install_defaults_match_approved_configuration(self):
+    def test_fresh_install_defaults_match_approved_configuration(self):
         with tempfile.TemporaryDirectory() as directory:
             path = str(Path(directory) / "config.json")
             store = SettingsStore(path)
@@ -383,7 +383,7 @@ class PersistenceTests(unittest.TestCase):
                 "reverse_led_order": True, "countdown_dark_edge_compensation": 2,
                 "weather_topbar_enabled": False, "weather_temperature_unit": "celsius",
                 "weather_brightness": 100, "weather_shadow_cutoff": 0,
-                "weather_cloud_variant": 2, "weather_snow_variant": 1,
+                "weather_cloud_variant": 3, "weather_snow_variant": 1,
             }
             for key, value in expected.items():
                 self.assertEqual(store.all()[key], value, key)

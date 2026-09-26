@@ -14,7 +14,6 @@ import {
 } from "./api";
 import { sampleArtwork } from "./artwork";
 import { ControllerMonitor, isSteamInputService } from "./controller_monitor";
-import { PongInputRuntime } from "./pong_input";
 import { isSteamControllerStore } from "./controller_battery";
 import type { SteamControllerStore } from "./controller_battery";
 import { normalizeAppId } from "./steam_app_id";
@@ -65,13 +64,11 @@ class SignalBarRuntime {
   private notificationsRegistration: Registration;
   private screenshotRegistration: Registration;
   private controllerMonitor: ControllerMonitor | undefined;
-  private pongInput = new PongInputRuntime();
 
   start() {
     if (this.alive) return;
     this.alive = true;
     this.registerSteamEvents();
-    this.pongInput.start();
     this.observeRunningApp("startup");
     this.pollTimer = window.setInterval(() => this.observeRunningApp("poll fallback"), 2000);
     console.log("[SignalBar] background runtime started");
@@ -79,7 +76,6 @@ class SignalBarRuntime {
 
   stop() {
     this.alive = false;
-    this.pongInput.stop();
     if (this.pollTimer !== undefined) window.clearInterval(this.pollTimer);
     if (this.retryTimer !== undefined) window.clearTimeout(this.retryTimer);
     this.gameRegistration?.unregister?.();
