@@ -14,6 +14,9 @@
   Other Weather loops remain eight seconds.
 - Clarify Weather's optional Country field: enter the full country name, not a
   two-letter code. Update the no-results hint to match.
+- Correct the ZIP installation instructions: enable Developer mode under
+  **Decky > Settings > General** only when the **Developer** section is not
+  already visible, then use **Developer > Install Plugin from ZIP**.
 
 ## 0.6.0 - 2026-09-24
 
